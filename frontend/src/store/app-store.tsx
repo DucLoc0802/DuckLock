@@ -1,0 +1,144 @@
+import React, { createContext, useContext, useEffect, useState } from 'react';
+
+import { authService } from '@/src/services/authService';
+import { categoryService } from '@/src/services/categoryService';
+import { proofImageService } from '@/src/services/proofImageService';
+import { reportService } from '@/src/services/reportService';
+import { transactionService } from '@/src/services/transactionService';
+import {
+  AsyncState,
+  Category,
+  CreateTransactionInput,
+  ProofImage,
+  ReportSummary,
+  Transaction,
+  User,
+} from '@/src/types/piggy';
+
+interface AppStoreValue {
+  authState: AsyncState;
+  user: User | null;
+  token: string | null;
+  transactions: Transaction[];
+  categories: Category[];
+  proofImages: ProofImage[];
+  report: ReportSummary | null;
+  isOffline: boolean;
+  login: (email: string, password: string) => Promise<void>;
+  register: (name: string, email: string, password: string) => Promise<void>;
+  logout: () => void;
+  addTransaction: (input: CreateTransactionInput) => Promise<void>;
+  toggleOffline: () => void;
+}
+
+const AppStoreContext = createContext<AppStoreValue | null>(null);
+
+export function AppStoreProvider({ children }: { children: React.ReactNode }) {
+  const [authState, setAuthState] = useState<AsyncState>('idle');
+  const [user, setUser] = useState<User | null>(null);
+  const [token, setToken] = useState<string | null>(null);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [proofImages, setProofImages] = useState<ProofImage[]>([]);
+  const [report, setReport] = useState<ReportSummary | null>(null);
+  const [isOffline, setIsOffline] = useState(false);
+
+  // 1. Tự động tải lại dữ liệu khi Token thay đổi (Người dùng đã Đăng nhập thành công)
+  useEffect(() => {
+    // Tải danh mục giả lập (Frontend Mock)
+    categoryService.listCategories().then(setCategories);
+    
+    if (token) {
+      // KẾT NỐI THẬT: Lấy danh sách giao dịch từ MySQL Backend
+      transactionService.listTransactions(token).then(setTransactions);
+      
+      // Tạm thời giữ mock các phần báo cáo & ảnh hóa đơn (Do backend chưa xây dựng)
+      proofImageService.listPending().then(setProofImages);
+      reportService.getMonthlySummary().then(setReport);
+    } else {
+      // Nếu đăng xuất, xóa sạch danh sách giao dịch hiển thị
+      setTransactions([]);
+    }
+  }, [token]);
+
+  async function login(email: string, password: string) {
+    setAuthState('loading');
+    try {
+      // Gọi API đăng nhập và cập nhật thông tin người dùng nếu thành công
+      const result = await authService.login(email, password);
+      setUser(result.user);
+      setToken(result.token);
+      setAuthState('success');
+    } catch (error) {
+      // Khi lỗi xảy ra (sai mật khẩu, server lỗi...), phải reset authState
+      // về 'idle' để nút bấm trở lại bình thường, không bị kẹt ở trạng thái 'loading'
+      setAuthState('idle');
+      throw error; // Ném lỗi lên trên để LoginScreen hiển thị thông báo lỗi cho người dùng
+    }
+  }
+
+  async function register(name: string, email: string, password: string) {
+    setAuthState('loading');
+    try {
+      // Gọi API đăng ký và tự động đăng nhập người dùng sau khi thành công
+      const result = await authService.register(name, email, password);
+      setUser(result.user);
+      setToken(result.token);
+      setAuthState('success');
+    } catch (error) {
+      // Tương tự login, phải reset lại trạng thái để nút không bị kẹt
+      setAuthState('idle');
+      throw error;
+    }
+  }
+
+  function logout() {
+    setUser(null);
+    setToken(null);
+    setAuthState('idle');
+  }
+
+  async function addTransaction(input: CreateTransactionInput) {
+    // Tìm tên danh mục tiếng Việt từ categoryId (ví dụ: 'food' -> 'Ăn uống')
+    // Vì Backend MySQL lưu và kiểm soát theo Tên danh mục (categoryName)
+    const categoryName = categories.find((c) => c.id === input.categoryId)?.name || 'Khác';
+    
+    // Truyền thêm biến token và categoryName để lưu vào DB MySQL
+    const created = await transactionService.createTransaction(input, token, isOffline, categoryName);
+    setTransactions((current) => [created, ...current]);
+  }
+
+  function toggleOffline() {
+    setIsOffline((current) => !current);
+  }
+
+  return (
+    <AppStoreContext.Provider
+      value={{
+        authState,
+        user,
+        token,
+        transactions,
+        categories,
+        proofImages,
+        report,
+        isOffline,
+        login,
+        register,
+        logout,
+        addTransaction,
+        toggleOffline,
+      }}>
+      {children}
+    </AppStoreContext.Provider>
+  );
+}
+
+export function useAppStore() {
+  const context = useContext(AppStoreContext);
+  if (!context) {
+    throw new Error('useAppStore must be used inside AppStoreProvider');
+  }
+
+  return context;
+}

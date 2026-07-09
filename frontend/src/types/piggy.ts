@@ -1,0 +1,60 @@
+export type TransactionType = 'expense' | 'income';
+export type SyncState = 'synced' | 'pending_create';
+export type AsyncState = 'idle' | 'loading' | 'success' | 'empty' | 'error' | 'offline';
+
+export interface User {
+  id: string;
+  name: string;
+  email: string;
+  defaultCurrency: string;
+  avatar: string;
+}
+
+export interface Category {
+  id: string;
+  name: string;
+  icon: string;
+  color: string;
+  isDefault: boolean;
+}
+
+export interface Transaction {
+  id: string;
+  categoryId: string;
+  amount: number;
+  type: TransactionType;
+  note: string;
+  transactionDate: string;
+  createdAt: string;
+  imageUri?: string;
+  syncState: SyncState;
+}
+
+export interface ProofImage {
+  id: string;
+  imageUri: string;
+  capturedAt: string;
+  status: 'pending' | 'processed';
+}
+
+export interface ReportSummary {
+  monthLabel: string;
+  totalExpense: number;
+  totalIncome: number;
+  compareText: string;
+  dailySeries: number[];
+  categoryBreakdown: {
+    categoryId: string;
+    amount: number;
+    percent: number;
+  }[];
+}
+
+export interface CreateTransactionInput {
+  amount: number;
+  categoryId: string;
+  type: TransactionType;
+  note: string;
+  transactionDate: string;
+  imageUri?: string;
+}

@@ -1,0 +1,105 @@
+import { Href, router } from 'expo-router';
+import { Pressable, Text, View } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+
+import { TransactionItem } from '@/components/transaction/TransactionItem';
+import { AppHeader } from '@/components/ui/AppHeader';
+import { AppScreen } from '@/components/ui/AppScreen';
+import { CuteCard } from '@/components/ui/CuteCard';
+import { FloatingActionButton } from '@/components/ui/FloatingActionButton';
+import { MonthSwitcher } from '@/components/ui/MonthSwitcher';
+import { OfflineBanner } from '@/components/ui/OfflineBanner';
+import { StatCard } from '@/components/ui/StatCard';
+import { useAppStore } from '@/src/store/app-store';
+import { colors, radius, spacing } from '@/src/theme/tokens';
+import { formatCompactCurrency, getMonthLabel } from '@/src/utils/format';
+
+export function HomeScreen() {
+  const { user, transactions, categories, report, isOffline } = useAppStore();
+  const latest = transactions.slice(0, 5);
+
+  return (
+    <AppScreen scrollable>
+      <AppHeader
+        title={`Xin chào, ${user?.name ?? 'bạn'}`}
+        subtitle="Hôm nay Piggy giúp bạn giữ ví gọn hơn"
+      />
+      {isOffline ? <OfflineBanner /> : null}
+      <MonthSwitcher label={getMonthLabel()} />
+
+      <LinearGradient
+        colors={[colors.primarySoft, '#F9FFF3']}
+        style={{
+          borderRadius: radius.xl,
+          padding: spacing.xl,
+          marginTop: spacing.lg,
+          gap: spacing.md,
+        }}>
+        <Text style={{ color: colors.textSecondary }}>Tổng chi tháng này</Text>
+        <Text style={{ fontSize: 34, fontWeight: '900', color: colors.textPrimary }}>
+          {formatCompactCurrency(report?.totalExpense ?? 0)}
+        </Text>
+        <View
+          style={{
+            alignSelf: 'flex-start',
+            backgroundColor: colors.accentYellowSoft,
+            paddingHorizontal: spacing.md,
+            paddingVertical: spacing.sm,
+            borderRadius: radius.pill,
+          }}>
+          <Text style={{ color: colors.textPrimary, fontWeight: '700' }}>
+            {report?.compareText ?? 'Đang cập nhật'}
+          </Text>
+        </View>
+      </LinearGradient>
+
+      <View style={{ flexDirection: 'row', gap: spacing.md, marginTop: spacing.lg }}>
+        <StatCard label="Tổng chi" value={report?.totalExpense ?? 0} />
+        <StatCard label="Tổng thu" value={report?.totalIncome ?? 0} tone="income" />
+      </View>
+
+      <CuteCard warm>
+        <Text style={{ fontWeight: '800', color: colors.textPrimary, marginBottom: spacing.md }}>
+          7 ngày gần đây
+        </Text>
+        <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: spacing.sm, height: 120 }}>
+          {(report?.dailySeries ?? []).map((value, index) => (
+            <View key={`${value}-${index}`} style={{ flex: 1, alignItems: 'center', gap: spacing.sm }}>
+              <View
+                style={{
+                  width: '100%',
+                  height: Math.max(22, value / 2),
+                  backgroundColor: index === 4 ? colors.accentYellow : colors.primary,
+                  borderRadius: radius.pill,
+                }}
+              />
+              <Text style={{ color: colors.textMuted, fontSize: 12 }}>T{index + 2}</Text>
+            </View>
+          ))}
+        </View>
+      </CuteCard>
+
+      <View style={{ marginTop: spacing.xl, marginBottom: 90 }}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Text style={{ fontSize: 20, fontWeight: '800', color: colors.textPrimary }}>
+            Giao dịch gần đây
+          </Text>
+          <Pressable onPress={() => router.push('/(tabs)/transactions' as Href)}>
+            <Text style={{ color: colors.primaryDark, fontWeight: '700' }}>Xem tất cả</Text>
+          </Pressable>
+        </View>
+        <View style={{ marginTop: spacing.md }}>
+          {latest.map((item) => (
+            <TransactionItem
+              key={item.id}
+              item={item}
+              category={categories.find((category) => category.id === item.categoryId)}
+            />
+          ))}
+        </View>
+      </View>
+
+      <FloatingActionButton onPress={() => router.push('/add-transaction' as Href)} />
+    </AppScreen>
+  );
+}
