@@ -5,23 +5,32 @@ import { colors, radius, spacing } from '@/src/theme/tokens';
 import { Category, Transaction } from '@/src/types/piggy';
 import { formatCompactCurrency, formatDate } from '@/src/utils/format';
 
+import { Pressable } from 'react-native';
+
 export function TransactionItem({
   item,
   category,
+  onPress,
 }: {
   item: Transaction;
   category?: Category;
+  onPress?: () => void;
 }) {
   const isIncome = item.type === 'income';
 
   return (
-    <View
-      style={{
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: spacing.md,
-        paddingVertical: spacing.md,
-      }}>
+    <Pressable
+      onPress={onPress}
+      disabled={!onPress}
+      style={({ pressed }) => [
+        {
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: spacing.md,
+          paddingVertical: spacing.md,
+          opacity: pressed ? 0.7 : 1,
+        }
+      ]}>
       <View
         style={{
           width: 48,
@@ -60,6 +69,6 @@ export function TransactionItem({
           <Text style={{ color: colors.textMuted, fontSize: 12, marginTop: 3 }}>Chờ đồng bộ</Text>
         ) : null}
       </View>
-    </View>
+    </Pressable>
   );
 }

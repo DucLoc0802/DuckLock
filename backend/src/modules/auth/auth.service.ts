@@ -62,6 +62,19 @@ export const AuthService = {
       [userId, dto.name, dto.email, password_hash, 'VND']
     );
 
+    const query = `INSERT INTO wallets (id, user_id, name, type, balance, currency, is_default, sort_order)
+VALUES 
+  (?, ?, 'Tiền mặt', 'CASH', 0, 'VND', true, 0),
+  (?, ?, 'Ngân hàng', 'BANK', 0, 'VND', false, 1),
+  (?, ?, 'Tiết kiệm', 'SAVING', 0, 'VND', false, 2)
+`;
+    const walletId1 = randomUUID();
+    const walletId2 = randomUUID();
+    const walletId3 = randomUUID();
+    await pool.query(
+      query,
+      [walletId1, userId, walletId2, userId, walletId3, userId]
+    );
     const accessToken = JwtUtil.generateAccessToken({ userId, email: dto.email });
     const refreshToken = JwtUtil.generateRefreshToken({ userId, email: dto.email });
 

@@ -3,6 +3,7 @@ import { Pressable, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 
 import { TransactionItem } from '@/components/transaction/TransactionItem';
+import { WalletSummary } from '@/components/wallet/WalletSummary';
 import { AppHeader } from '@/components/ui/AppHeader';
 import { AppScreen } from '@/components/ui/AppScreen';
 import { CuteCard } from '@/components/ui/CuteCard';
@@ -53,6 +54,8 @@ export function HomeScreen() {
         </View>
       </LinearGradient>
 
+      <WalletSummary />
+
       <View style={{ flexDirection: 'row', gap: spacing.md, marginTop: spacing.lg }}>
         <StatCard label="Tổng chi" value={report?.totalExpense ?? 0} />
         <StatCard label="Tổng thu" value={report?.totalIncome ?? 0} tone="income" />
@@ -94,6 +97,7 @@ export function HomeScreen() {
               key={item.id}
               item={item}
               category={categories.find((category) => category.id === item.categoryId)}
+              onPress={() => router.push(`/transaction/${item.id}` as Href)}
             />
           ))}
         </View>

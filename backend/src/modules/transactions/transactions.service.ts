@@ -69,15 +69,19 @@ export const TransactionsService = {
     };
   },
 
-  getTransactionById: async (id: string): Promise<any> => {
+  getTransactionById: async (id: string, userId: string): Promise<any> => {
     const query = `SELECT 
       t.id, t.amount, t.currency, t.type, t.transaction_date, t.description,
-      c.id AS category_id, c.name AS category_name, c.icon AS category_icon, c.color AS category_color
+      c.id AS category_id, c.name AS category_name, c.icon AS category_icon, c.color AS category_color,
+      pi.image_url AS image_url
     FROM transactions t
     LEFT JOIN categories c ON t.category_id = c.id
-    WHERE t.id = ? AND t.deleted_at IS NULL
-    LIMIT 1`
-    const [rows] = await pool.query<any[]>(query, [id]);
+    LEFT JOIN proof_images pi ON t.proof_image_id = pi.id
+    WHERE t.id = ? AND t.user_id = ? AND t.deleted_at IS NULL
+    LIMIT 1`;
+
+    const [rows] = await pool.query<any[]>(query, [id, userId]);
+
     const tx = rows[0];
     if (!tx) {
       throw new Error("Không tìm thấy giao dịch");
@@ -85,11 +89,12 @@ export const TransactionsService = {
 
     return {
       id: tx.id,
-      amount: tx.amount,
+      amount: Number(tx.amount),
       currency: tx.currency,
       type: tx.type.toLowerCase(),
-      transaction_date: tx.transaction_date,
+      transactionDate: tx.transaction_date,
       description: tx.description,
+      imageUri: tx.image_url || null, // Ánh xạ cột image_url thành imageUri
       category: tx.category_id ? {
         id: tx.category_id,
         name: tx.category_name,
@@ -97,16 +102,18 @@ export const TransactionsService = {
         color: tx.category_color
       } : null
     };
+
   },
 
-  deleteTransaction: async (id: string): Promise<any> => {
+  deleteTransaction: async (id: string, userId: string): Promise<any> => {
+    // Sửa câu SQL để kiểm tra user_id bảo mật
     const query = `UPDATE transactions 
     SET deleted_at = NOW() 
-    WHERE id = ? 
+    WHERE id = ? AND user_id = ?
     AND deleted_at IS NULL 
     LIMIT 1`;
 
-    const [result] = await pool.query<any>(query, [id]);
+    const [result] = await pool.query<any>(query, [id, userId]);
     if (result.affectedRows === 0) {
       throw new Error("Không tìm thấy giao dịch");
     }
@@ -114,15 +121,18 @@ export const TransactionsService = {
     return {
       success: true,
       message: "Xóa giao dịch thành công"
-    }
+    };
   },
-  updateTransaction: async (id: string, dto: any): Promise<any> => {
-    // 1. Kiểm tra xem giao dịch có tồn tại hay không
-    const [txs] = await pool.query<any[]>("SELECT user_id FROM transactions WHERE id = ? AND deleted_at IS NULL", [id]);
+
+  updateTransaction: async (id: string, userId: string, dto: any): Promise<any> => {
+    // 1. Kiểm tra xem giao dịch có đúng là của người dùng này không
+    const [txs] = await pool.query<any[]>(
+      "SELECT id FROM transactions WHERE id = ? AND user_id = ? AND deleted_at IS NULL",
+      [id, userId]
+    );
     if (txs.length === 0) {
       throw new Error("Không tìm thấy giao dịch");
     }
-    const userId = txs[0].user_id;
 
     // 2. Xử lý tìm hoặc tạo mới danh mục nếu người dùng thay đổi category
     let categoryId: string | null = null;
@@ -144,7 +154,7 @@ export const TransactionsService = {
       }
     }
 
-    // 3. Thực thi câu lệnh SQL UPDATE với COALESCE
+    // 3. Thực thi câu lệnh SQL UPDATE lọc theo id và user_id
     const query = `UPDATE transactions
     SET
       amount = COALESCE(?, amount),
@@ -154,11 +164,10 @@ export const TransactionsService = {
       description = COALESCE(?, description),
       type = COALESCE(?, type),
       updated_at = NOW()
-    WHERE id = ?
+    WHERE id = ? AND user_id = ?
     AND deleted_at IS NULL
     LIMIT 1;`;
 
-    // Chuyển toàn bộ các giá trị undefined thành null để tránh lỗi mysql2
     const params = [
       dto.amount !== undefined ? dto.amount : null,
       dto.amount !== undefined ? dto.amount : null,
@@ -166,7 +175,8 @@ export const TransactionsService = {
       dto.transactionDate !== undefined ? dto.transactionDate : null,
       dto.description !== undefined ? dto.description : null,
       dto.type !== undefined ? dto.type.toUpperCase() : null,
-      id
+      id,
+      userId
     ];
 
     const [result] = await pool.query<any>(query, params);
@@ -175,8 +185,9 @@ export const TransactionsService = {
     }
 
     // 4. Trả về đối tượng giao dịch đầy đủ sau khi đã cập nhật
-    return TransactionsService.getTransactionById(id);
+    return TransactionsService.getTransactionById(id, userId);
   },
+
   getTransaction: async (dto: any): Promise<any> => {
     const query = `SELECT 
       t.id, t.amount, t.currency, t.type, t.transaction_date, t.description,

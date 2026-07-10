@@ -60,14 +60,25 @@ export const TransactionsController = {
   getTransactionById: async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
-      if (!id) {
-        return res.status(400).json({
-          success: false,
-          message: "Thiếu id giao dịch"
-        });
+
+      // 1. Xác thực JWT Token của người dùng
+      const authHeader = req.headers.authorization;
+      if (!authHeader || !authHeader.startsWith("Bearer ")) {
+        return res.status(401).json({ success: false, message: "Không tìm thấy token" });
+      }
+      const token = authHeader.split(" ")[1];
+      const ACCESS_SECRET = process.env.JWT_ACCESS_SECRET || "ducklockquynhanhaccess";
+
+      let decoded: { userId: string };
+      try {
+        decoded = jwt.verify(token, ACCESS_SECRET) as { userId: string };
+      } catch (jwtError) {
+        return res.status(401).json({ success: false, message: "Phiên đăng nhập hết hạn hoặc không hợp lệ" });
       }
 
-      const transaction = await TransactionsService.getTransactionById(id);
+      // 2. Gọi Service và truyền thêm userId để kiểm tra quyền sở hữu
+      const transaction = await TransactionsService.getTransactionById(id, decoded.userId);
+
       return res.status(200).json({
         success: true,
         data: transaction
@@ -80,21 +91,35 @@ export const TransactionsController = {
       });
     }
   },
+
   deleteTransaction: async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
       if (!id) {
-        return res.status(400).json({
-          success: false,
-          message: "Thiếu ID giao dịch"
-        });
+        return res.status(400).json({ success: false, message: "Thiếu ID giao dịch" });
       }
 
-      const transaction = await TransactionsService.deleteTransaction(id);
+      // 1. Xác thực JWT Token của người dùng
+      const authHeader = req.headers.authorization;
+      if (!authHeader || !authHeader.startsWith("Bearer ")) {
+        return res.status(401).json({ success: false, message: "Không tìm thấy token" });
+      }
+      const token = authHeader.split(" ")[1];
+      const ACCESS_SECRET = process.env.JWT_ACCESS_SECRET || "ducklockquynhanhaccess";
+
+      let decoded: { userId: string };
+      try {
+        decoded = jwt.verify(token, ACCESS_SECRET) as { userId: string };
+      } catch (jwtError) {
+        return res.status(401).json({ success: false, message: "Token không hợp lệ hoặc đã hết hạn" });
+      }
+
+      // 2. Gọi Service truyền cả id và userId để đảm bảo chỉ được xóa giao dịch của chính mình
+      const result = await TransactionsService.deleteTransaction(id, decoded.userId);
       return res.status(200).json({
         success: true,
         message: "Xóa giao dịch thành công",
-        data: transaction
+        data: result
       });
 
     } catch (error: any) {
@@ -105,43 +130,51 @@ export const TransactionsController = {
       });
     }
   },
+
 
   updateTransaction: async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
       const { amount, category, transactionDate, description, type } = req.body as CreateTransactionDto;
       if (!id) {
-        return res.status(400).json({
-          success: false,
-          message: "Thiếu ID giao dịch"
-        });
-      }
-      if (amount !== undefined) {
-        if (typeof amount !== "number" || amount <= 0) {
-          return res.status(400).json({
-            success: false,
-            message: "Số tiền phải là số dương"
-          })
-        }
-      }
-      if (transactionDate !== undefined) {
-        if (isNaN(new Date(transactionDate).getTime())) {
-          return res.status(400).json({
-            success: false,
-            message: "Ngày giao dịch không hợp lệ",
-          });
-        }
-      }
-      if (type !== undefined) {
-        if (type !== "expense" && type !== "income") {
-          return res.status(400).json({
-            success: false,
-            message: "Loại giao dịch phải là expense hoặc income",
-          });
-        }
+        return res.status(400).json({ success: false, message: "Thiếu ID giao dịch" });
       }
 
-      const transaction = await TransactionsService.updateTransaction(id, { amount, category, transactionDate, description, type });
+      // 1. Xác thực JWT Token của người dùng
+      const authHeader = req.headers.authorization;
+      if (!authHeader || !authHeader.startsWith("Bearer ")) {
+        return res.status(401).json({ success: false, message: "Không tìm thấy token" });
+      }
+      const token = authHeader.split(" ")[1];
+      const ACCESS_SECRET = process.env.JWT_ACCESS_SECRET || "ducklockquynhanhaccess";
+
+      let decoded: { userId: string };
+      try {
+        decoded = jwt.verify(token, ACCESS_SECRET) as { userId: string };
+      } catch (jwtError) {
+        return res.status(401).json({ success: false, message: "Token không hợp lệ hoặc đã hết hạn" });
+      }
+
+      // Validation đầu vào
+      if (amount !== undefined && (typeof amount !== "number" || amount <= 0)) {
+        return res.status(400).json({ success: false, message: "Số tiền phải là số dương" });
+      }
+      if (transactionDate !== undefined && isNaN(new Date(transactionDate).getTime())) {
+        return res.status(400).json({ success: false, message: "Ngày giao dịch không hợp lệ" });
+      }
+      if (type !== undefined && type !== "expense" && type !== "income") {
+        return res.status(400).json({ success: false, message: "Loại giao dịch phải là expense hoặc income" });
+      }
+
+      // 2. Truyền thêm userId đã giải mã từ Token
+      const transaction = await TransactionsService.updateTransaction(id, decoded.userId, {
+        amount,
+        category,
+        transactionDate,
+        description,
+        type
+      });
+
       return res.status(200).json({
         success: true,
         message: "Cập nhật giao dịch thành công",
@@ -154,6 +187,7 @@ export const TransactionsController = {
       });
     }
   },
+
   getTransaction: async (req: Request, res: Response) => {
     try {
       // 1. Lấy token từ Header "Authorization: Bearer <token>"

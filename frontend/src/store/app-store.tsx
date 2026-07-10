@@ -28,7 +28,10 @@ interface AppStoreValue {
   register: (name: string, email: string, password: string) => Promise<void>;
   logout: () => void;
   addTransaction: (input: CreateTransactionInput) => Promise<void>;
+  deleteTransaction: (id: string) => Promise<void>;
+  uploadProofImage: (imageUri: string) => Promise<void>;
   toggleOffline: () => void;
+  syncCategory: (category: Category) => void;
 }
 
 const AppStoreContext = createContext<AppStoreValue | null>(null);
@@ -50,10 +53,25 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
     
     if (token) {
       // KẾT NỐI THẬT: Lấy danh sách giao dịch từ MySQL Backend
-      transactionService.listTransactions(token).then(setTransactions);
+      transactionService.listTransactions(token).then((txs) => {
+        setTransactions(txs);
+        
+        // Trích xuất các danh mục động từ giao dịch trả về từ Backend
+        // để bổ sung vào categories state nếu chưa tồn tại
+        txs.forEach((tx: any) => {
+          if (tx.rawCategory) {
+            setCategories((prev) => {
+              if (prev.some((c) => c.id === tx.rawCategory.id)) return prev;
+              return [...prev, tx.rawCategory];
+            });
+          }
+        });
+      });
       
-      // Tạm thời giữ mock các phần báo cáo & ảnh hóa đơn (Do backend chưa xây dựng)
-      proofImageService.listPending().then(setProofImages);
+      // Lấy danh sách ảnh hóa đơn đang chờ xử lý từ Backend
+      proofImageService.listPending(token).then(setProofImages);
+      
+      // Tạm thời giữ mock phần báo cáo (Do backend chưa xây dựng)
       reportService.getMonthlySummary().then(setReport);
     } else {
       // Nếu đăng xuất, xóa sạch danh sách giao dịch hiển thị
@@ -108,6 +126,23 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
     setTransactions((current) => [created, ...current]);
   }
 
+  async function deleteTransaction(id: string) {
+    await transactionService.deleteTransaction(id, token);
+    setTransactions((current) => current.filter((tx) => tx.id !== id));
+  }
+
+  async function uploadProofImage(imageUri: string) {
+    const newImage = await proofImageService.uploadImage(imageUri, token);
+    setProofImages((current) => [newImage, ...current]);
+  }
+
+  function syncCategory(category: Category) {
+    setCategories((prev) => {
+      if (prev.some((c) => c.id === category.id)) return prev;
+      return [...prev, category];
+    });
+  }
+
   function toggleOffline() {
     setIsOffline((current) => !current);
   }
@@ -127,7 +162,10 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
         register,
         logout,
         addTransaction,
+        deleteTransaction,
+        uploadProofImage,
         toggleOffline,
+        syncCategory,
       }}>
       {children}
     </AppStoreContext.Provider>

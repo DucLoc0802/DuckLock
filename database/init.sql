@@ -90,6 +90,151 @@ CREATE TABLE proof_images (
     CONSTRAINT fk_pi_users FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
 
+-- 2. BẢNG WALLETS
+
+
+CREATE TABLE wallets (
+    id VARCHAR(36) PRIMARY KEY DEFAULT(UUID()),
+
+    user_id VARCHAR(36) NOT NULL,
+
+    name VARCHAR(100) NOT NULL,
+
+    type ENUM(
+        'CASH',
+        'BANK',
+        'SAVING',
+        'OTHER'
+    ) NOT NULL DEFAULT 'CASH',
+
+    balance DECIMAL(15, 2) NOT NULL DEFAULT 0.00,
+    currency CHAR(3) NOT NULL DEFAULT 'VND',
+
+-- Chỉ dùng cho loại SAVING
+
+interest_rate_percent DECIMAL(5, 2) NULL,
+
+    note VARCHAR(200) NULL,
+
+    is_default BOOLEAN NOT NULL DEFAULT FALSE,
+    sort_order SMALLINT NOT NULL DEFAULT 0,
+
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMP NULL,
+
+    active_key TINYINT GENERATED ALWAYS AS (
+        CASE 
+            WHEN deleted_at IS NULL THEN 1 
+            ELSE NULL 
+        END
+    ) VIRTUAL,
+
+    UNIQUE KEY uidx_wallet_user_name_active (
+        user_id,
+        name,
+        active_key
+    ),
+
+    INDEX idx_wallets_user_id (
+        user_id,
+        deleted_at
+    ),
+
+    INDEX idx_wallets_user_type (
+        user_id,
+        type,
+        deleted_at
+    ),
+
+    CONSTRAINT fk_wallets_users 
+        FOREIGN KEY (user_id) REFERENCES users (id) 
+        ON DELETE CASCADE,
+
+    CONSTRAINT chk_wallet_balance_non_negative 
+        CHECK (balance >= 0),
+
+    CONSTRAINT chk_wallet_interest_rate 
+        CHECK (
+            interest_rate_percent IS NULL 
+            OR interest_rate_percent >= 0
+        )
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+
+-- 5. BẢNG BUDGETS
+
+
+CREATE TABLE budgets (
+    id VARCHAR(36) PRIMARY KEY DEFAULT(UUID()),
+
+    user_id VARCHAR(36) NOT NULL,
+
+-- NULL = ngân sách tổng của tháng
+-- Có giá trị = ngân sách riêng cho một danh mục
+category_id VARCHAR(36) NULL,
+name VARCHAR(100) NULL,
+amount DECIMAL(15, 2) NOT NULL,
+currency CHAR(3) NOT NULL DEFAULT 'VND',
+amount_in_default_currency DECIMAL(15, 2) NOT NULL,
+
+-- Lưu ngày đầu tiên của tháng, ví dụ: 2026-07-01
+budget_month DATE NOT NULL,
+
+-- Phần trăm cảnh báo, ví dụ 80 nghĩa là cảnh báo khi đã dùng 80% ngân sách
+alert_threshold_percent TINYINT NOT NULL DEFAULT 80,
+is_active BOOLEAN NOT NULL DEFAULT TRUE,
+created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+deleted_at TIMESTAMP NULL,
+
+-- Dùng để unique được cả trường hợp category_id NULL
+scope_category_id VARCHAR(36) GENERATED ALWAYS AS (COALESCE(category_id, 'ALL')) VIRTUAL,
+
+-- Chỉ enforce unique với budget chưa bị soft-delete
+
+active_key TINYINT GENERATED ALWAYS AS (
+        CASE 
+            WHEN deleted_at IS NULL THEN 1 
+            ELSE NULL 
+        END
+    ) VIRTUAL,
+
+    UNIQUE KEY uidx_budget_user_month_category_active (
+        user_id,
+        budget_month,
+        scope_category_id,
+        active_key
+    ),
+
+    INDEX idx_budgets_user_month (
+        user_id,
+        budget_month,
+        deleted_at
+    ),
+
+    INDEX idx_budgets_user_category (
+        user_id,
+        category_id,
+        deleted_at
+    ),
+
+    INDEX idx_budgets_category_id (category_id),
+
+    CONSTRAINT fk_budgets_users 
+        FOREIGN KEY (user_id) REFERENCES users (id) 
+        ON DELETE CASCADE,
+
+    CONSTRAINT fk_budgets_categories 
+        FOREIGN KEY (category_id) REFERENCES categories (id) 
+        ON DELETE SET NULL,
+
+    CONSTRAINT chk_budget_amount_positive 
+        CHECK (amount > 0),
+
+    CONSTRAINT chk_budget_alert_threshold 
+        CHECK (alert_threshold_percent BETWEEN 1 AND 100)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+
 -- 6. BẢNG TRANSACTIONS
 CREATE TABLE transactions (
     id VARCHAR(36) PRIMARY KEY DEFAULT(UUID()),

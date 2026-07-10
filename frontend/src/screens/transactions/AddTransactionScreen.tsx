@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react';
-import { Alert, Pressable, Text, TextInput, View } from 'react-native';
-import { router } from 'expo-router';
+import { Alert, Pressable, Text, TextInput, View, TouchableOpacity } from 'react-native';
+import { router, useLocalSearchParams } from 'expo-router';
+import { Image } from 'expo-image';
+import { Ionicons } from '@expo/vector-icons';
 
 import { AppHeader } from '@/components/ui/AppHeader';
 import { AppScreen } from '@/components/ui/AppScreen';
@@ -12,6 +14,8 @@ import { colors, radius, spacing } from '@/src/theme/tokens';
 
 export function AddTransactionScreen() {
   const { categories, addTransaction, isOffline } = useAppStore();
+  const { imageUri } = useLocalSearchParams<{ imageUri?: string }>();
+  
   const expenseCategories = useMemo(
     () => categories.filter((item) => item.id !== 'salary'),
     [categories],
@@ -37,6 +41,7 @@ export function AddTransactionScreen() {
         type,
         note,
         transactionDate: new Date(transactionDate).toISOString(),
+        imageUri, // Truyền đường dẫn ảnh vừa chụp xuống store
       });
       Alert.alert('Thành công', isOffline ? 'Đã lưu và chờ đồng bộ' : 'Đã lưu giao dịch');
       router.back();
@@ -49,6 +54,31 @@ export function AddTransactionScreen() {
     <AppScreen scrollable>
       <AppHeader title="Thêm giao dịch" subtitle="Nhập nhanh để Piggy ghi nhớ giúp bạn" back />
       {isOffline ? <OfflineBanner /> : null}
+
+      {/* Hiển thị ảnh xem trước nếu được chụp từ Camera truyền sang */}
+      {imageUri ? (
+        <View style={{ position: 'relative', marginBottom: spacing.md }}>
+          <Image
+            source={{ uri: imageUri }}
+            style={{ width: '100%', height: 200, borderRadius: radius.xl }}
+            contentFit="cover"
+          />
+          {/* Nút bấm hình chữ X để xóa ảnh đính kèm khỏi giao dịch */}
+          <TouchableOpacity
+            onPress={() => router.setParams({ imageUri: undefined })}
+            style={{
+              position: 'absolute',
+              top: 12,
+              right: 12,
+              backgroundColor: 'rgba(0,0,0,0.6)',
+              padding: 6,
+              borderRadius: 20,
+            }}
+          >
+            <Ionicons name="close" size={20} color={colors.white} />
+          </TouchableOpacity>
+        </View>
+      ) : null}
 
       <View style={{ gap: spacing.lg }}>
         <View>

@@ -12,7 +12,7 @@ import { colors, radius, spacing } from '@/src/theme/tokens';
 export function LoginScreen() {
   const { login, authState } = useAppStore();
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('123456');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
 
   async function onSubmit() {
@@ -61,7 +61,7 @@ export function LoginScreen() {
 
         <View style={{ gap: spacing.md }}>
           <PrimaryButton label="Đăng nhập" onPress={onSubmit} loading={authState === 'loading'} />
-          <SecondaryButton label="Đăng nhập với Google" onPress={() => {}} />
+          <SecondaryButton label="Đăng nhập với Google" onPress={() => { }} />
         </View>
 
         <Pressable onPress={() => router.push('/(auth)/register' as Href)}>

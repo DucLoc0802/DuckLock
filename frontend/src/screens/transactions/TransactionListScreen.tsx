@@ -48,6 +48,7 @@ export function TransactionListScreen() {
             <TransactionItem
               item={item}
               category={categories.find((category) => category.id === item.categoryId)}
+              onPress={() => router.push(`/transaction/${item.id}` as Href)}
             />
           </View>
         ))}

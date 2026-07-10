@@ -58,3 +58,14 @@ export interface CreateTransactionInput {
   transactionDate: string;
   imageUri?: string;
 }
+
+export type WalletType = 'CASH' | 'BANK' | 'SAVING' | 'OTHER';
+
+export interface Wallet {
+  id: string;
+  name: string;
+  type: WalletType;
+  balance: number;
+  currency: string;
+  interest_rate_percent: number | null;
+}

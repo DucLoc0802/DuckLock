@@ -44,6 +44,13 @@ export const transactionService = {
         transactionDate: item.transaction_date,
         createdAt: item.created_at,
         syncState: 'synced',
+        rawCategory: item.category_id ? {
+          id: item.category_id,
+          name: item.category_name || 'Khác',
+          icon: item.category_icon || '📝',
+          color: item.category_color || '#9E9E9E',
+          isDefault: false
+        } : null
       }));
     } catch (error) {
       console.error("Lỗi khi kết nối lấy danh sách giao dịch:", error);
@@ -107,6 +114,72 @@ export const transactionService = {
       transactionDate: result.data.transactionDate,
       createdAt: new Date().toISOString(),
       syncState: 'synced',
+    };
+  },
+
+  // 3. API Xóa giao dịch từ MySQL Backend (UC-06)
+  async deleteTransaction(id: string, token: string | null): Promise<void> {
+    await wait(randomDelay());
+
+    if (!token) {
+      throw new Error('Bạn cần đăng nhập để thực hiện');
+    }
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/transactions/${id}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      const result = await response.json();
+      if (!response.ok || !result.success) {
+        throw new Error(result.message || 'Xóa giao dịch thất bại');
+      }
+    } catch (error) {
+      console.error('Lỗi khi xóa giao dịch:', error);
+      throw error;
+    }
+  },
+
+  // 4. API Lấy chi tiết một giao dịch từ MySQL Backend
+  async getTransactionDetail(id: string, token: string | null): Promise<any> {
+    await wait(randomDelay());
+
+    if (!token) {
+      throw new Error('Bạn cần đăng nhập để thực hiện');
+    }
+
+    const response = await fetch(`${API_BASE_URL}/transactions/${id}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+
+    const result = await response.json();
+    if (!response.ok || !result.success) {
+      throw new Error(result.message || 'Lấy chi tiết giao dịch thất bại');
+    }
+
+    return {
+      id: result.data.id,
+      amount: Number(result.data.amount),
+      categoryId: result.data.category?.id || 'food',
+      type: result.data.type.toLowerCase(),
+      note: result.data.description || '',
+      transactionDate: result.data.transactionDate,
+      imageUri: result.data.imageUri || null,
+      rawCategory: result.data.category ? {
+        id: result.data.category.id,
+        name: result.data.category.name || 'Khác',
+        icon: result.data.category.icon || '📝',
+        color: result.data.category.color || '#9E9E9E',
+        isDefault: false
+      } : null
     };
   },
 };
