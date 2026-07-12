@@ -23,11 +23,13 @@ interface AppStoreValue {
   categories: Category[];
   proofImages: ProofImage[];
   report: ReportSummary | null;
+  weeklyReport: number[];
   isOffline: boolean;
   login: (email: string, password: string) => Promise<void>;
   register: (name: string, email: string, password: string) => Promise<void>;
   logout: () => void;
   addTransaction: (input: CreateTransactionInput) => Promise<void>;
+  updateTransaction: (id: string, input: CreateTransactionInput) => Promise<void>;
   deleteTransaction: (id: string) => Promise<void>;
   uploadProofImage: (imageUri: string) => Promise<void>;
   toggleOffline: () => void;
@@ -44,6 +46,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
   const [categories, setCategories] = useState<Category[]>([]);
   const [proofImages, setProofImages] = useState<ProofImage[]>([]);
   const [report, setReport] = useState<ReportSummary | null>(null);
+  const [weeklyReport, setWeeklyReport] = useState<number[]>([0, 0, 0, 0, 0, 0, 0]);
   const [isOffline, setIsOffline] = useState(false);
 
   // 1. Tự động tải lại dữ liệu khi Token thay đổi (Người dùng đã Đăng nhập thành công)
@@ -67,12 +70,20 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
           }
         });
       });
-      
       // Lấy danh sách ảnh hóa đơn đang chờ xử lý từ Backend
       proofImageService.listPending(token).then(setProofImages);
       
-      // Tạm thời giữ mock phần báo cáo (Do backend chưa xây dựng)
-      reportService.getMonthlySummary().then(setReport);
+      // Gọi API lấy báo cáo tháng thật từ Backend
+      reportService.getMonthlySummary(token).then((data) => {
+        if (data) setReport(data);
+      });
+
+      // Gọi API lấy báo cáo tuần thật từ Backend
+      reportService.getWeeklySummary(token).then((data) => {
+        if (data && data.dailySeries) {
+          setWeeklyReport(data.dailySeries);
+        }
+      });
     } else {
       // Nếu đăng xuất, xóa sạch danh sách giao dịch hiển thị
       setTransactions([]);
@@ -126,6 +137,12 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
     setTransactions((current) => [created, ...current]);
   }
 
+  async function updateTransaction(id: string, input: CreateTransactionInput) {
+    const categoryName = categories.find((c) => c.id === input.categoryId)?.name || 'Khác';
+    const updated = await transactionService.updateTransaction(id, input, token, categoryName);
+    setTransactions((current) => current.map((t) => (t.id === id ? updated : t)));
+  }
+
   async function deleteTransaction(id: string) {
     await transactionService.deleteTransaction(id, token);
     setTransactions((current) => current.filter((tx) => tx.id !== id));
@@ -157,11 +174,13 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
         categories,
         proofImages,
         report,
+        weeklyReport,
         isOffline,
         login,
         register,
         logout,
         addTransaction,
+        updateTransaction,
         deleteTransaction,
         uploadProofImage,
         toggleOffline,

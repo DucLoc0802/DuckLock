@@ -3,15 +3,8 @@ import { CreateTransactionDto } from "./dto/create-transaction.dto";
 import { randomUUID } from "crypto";
 
 export const TransactionsService = {
-  createTransaction: async (dto: CreateTransactionDto): Promise<any> => {
-    // 1. Lấy user đầu tiên trong hệ thống để gán làm chủ sở hữu (tránh lỗi khóa ngoại khi chưa có Auth JWT middleware)
-    const [users] = await pool.query<any[]>("SELECT id FROM users LIMIT 1");
-    if (users.length === 0) {
-      throw new Error("Không tìm thấy người dùng nào. Vui lòng đăng ký tài khoản trước!");
-    }
-    const userId = users[0].id;
-
-    // 2. Tìm hoặc Tạo mới danh mục (Category) tương ứng để lấy category_id (tránh lỗi khóa ngoại fk_tx_categories)
+  createTransaction: async (userId: string, dto: CreateTransactionDto): Promise<any> => {
+    // Tìm hoặc Tạo mới danh mục (Category) tương ứng để lấy category_id (tránh lỗi khóa ngoại fk_tx_categories)
     const categoryName = dto.category.trim();
     const [categories] = await pool.query<any[]>(
       "SELECT id FROM categories WHERE name = ? AND (user_id = ? OR user_id IS NULL) LIMIT 1",
@@ -31,12 +24,12 @@ export const TransactionsService = {
       );
     }
 
-    // 3. Chuẩn bị các giá trị chèn giao dịch
+    // Chuẩn bị các giá trị chèn giao dịch
     const txId = randomUUID();
     const currency = "VND"; // Mặc định tiền tệ của giao dịch
     const amountInDefaultCurrency = dto.amount; // Mặc định tỉ giá 1:1 khi chưa có API tỉ giá
 
-    // 4. INSERT giao dịch mới vào MySQL
+    // INSERT giao dịch mới vào MySQL
     await pool.query(
       `INSERT INTO transactions 
        (id, user_id, category_id, proof_image_id, amount, currency, amount_in_default_currency, type, transaction_date, description) 
@@ -54,7 +47,7 @@ export const TransactionsService = {
       ]
     );
 
-    // 5. Trả về đối tượng giao dịch đã tạo
+    // Trả về đối tượng giao dịch đã tạo
     return {
       id: txId,
       amount: dto.amount,

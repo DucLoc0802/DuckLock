@@ -105,7 +105,12 @@ export function TransactionDetailScreen() {
           <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Chi tiết giao dịch</Text>
-        <View style={{ width: 44 }} />
+        <TouchableOpacity
+          onPress={() => router.push(`/edit-transaction/${id}` as any)}
+          style={styles.backButton}
+        >
+          <Ionicons name="pencil" size={20} color={colors.primaryDark} />
+        </TouchableOpacity>
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>

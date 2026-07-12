@@ -182,4 +182,47 @@ export const transactionService = {
       } : null
     };
   },
+
+  // 5. API Cập nhật giao dịch (PATCH /api/transactions/:id)
+  async updateTransaction(
+    id: string,
+    input: CreateTransactionInput,
+    token: string | null,
+    categoryName: string,
+  ): Promise<Transaction> {
+    if (!token) {
+      throw new Error('Bạn cần đăng nhập để thực hiện');
+    }
+
+    const response = await fetch(`${API_BASE_URL}/transactions/${id}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        amount: input.amount,
+        category: categoryName,
+        transactionDate: input.transactionDate.slice(0, 10),
+        description: input.note,
+        type: input.type,
+      }),
+    });
+
+    const result = await response.json();
+    if (!response.ok || !result.success) {
+      throw new Error(result.message || 'Cập nhật giao dịch thất bại');
+    }
+
+    return {
+      id: result.data.id,
+      amount: Number(result.data.amount),
+      categoryId: input.categoryId,
+      type: input.type,
+      note: input.note,
+      transactionDate: input.transactionDate,
+      createdAt: result.data.created_at || new Date().toISOString(),
+      syncState: 'synced',
+    };
+  },
 };

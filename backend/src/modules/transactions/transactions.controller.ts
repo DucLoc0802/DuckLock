@@ -6,6 +6,20 @@ import jwt from "jsonwebtoken";
 export const TransactionsController = {
   createTransaction: async (req: Request, res: Response) => {
     try {
+      const authHeader = req.headers.authorization;
+      if (!authHeader || !authHeader.startsWith("Bearer ")) {
+        return res.status(401).json({ success: false, message: "Không tìm thấy token" });
+      }
+      const token = authHeader.split(" ")[1];
+      const ACCESS_SECRET = process.env.JWT_ACCESS_SECRET || "ducklockquynhanhaccess";
+
+      let decoded: { userId: string };
+      try {
+        decoded = jwt.verify(token, ACCESS_SECRET) as { userId: string };
+      } catch (jwtError) {
+        return res.status(401).json({ success: false, message: "Phiên đăng nhập hết hạn hoặc không hợp lệ" });
+      }
+
       const { amount, category, transactionDate, description, type } = req.body as CreateTransactionDto;
 
       if (amount === undefined || !category || !transactionDate || !type) {
@@ -36,7 +50,7 @@ export const TransactionsController = {
         });
       }
 
-      const transaction = await TransactionsService.createTransaction({
+      const transaction = await TransactionsService.createTransaction(decoded.userId, {
         amount,
         category,
         transactionDate: new Date(transactionDate),

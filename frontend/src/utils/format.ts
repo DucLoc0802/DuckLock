@@ -1,9 +1,11 @@
-export function formatCurrency(value: number) {
-  return `${value.toLocaleString('vi-VN')} VND`;
+export function formatCurrency(value: number | string) {
+  const num = typeof value === 'string' ? parseFloat(value) : value;
+  return `${(num || 0).toLocaleString('vi-VN')} VND`;
 }
 
-export function formatCompactCurrency(value: number) {
-  return `${value.toLocaleString('vi-VN')}đ`;
+export function formatCompactCurrency(value: number | string) {
+  const num = typeof value === 'string' ? parseFloat(value) : value;
+  return `${(num || 0).toLocaleString('vi-VN')}đ`;
 }
 
 export function formatDate(input: string) {

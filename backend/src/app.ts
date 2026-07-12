@@ -3,6 +3,7 @@ import cors from "cors";
 import { AuthModule } from "./modules/auth/auth.module";
 import { TransactionsModule } from "./modules/transactions/transactions.module";
 import { WalletModule } from "./modules/wallets/wallets.module";
+import { ReportsModule } from "./modules/reports/reports.module";
 
 const app = express();
 
@@ -26,6 +27,7 @@ app.get("/api/health", (req, res) =>
 app.use("/api/auth", AuthModule.router);
 app.use("/api/transactions", TransactionsModule.router);
 app.use("/api/wallets", WalletModule.router);
+app.use("/api/reports", ReportsModule.router);
 // Xử lý Route không tìm thấy (404 Handler)
 app.use((req, res) =>
   res.status(404).json({ message: `Route ${req.originalUrl} not found` })

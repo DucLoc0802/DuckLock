@@ -16,8 +16,10 @@ import { colors, radius, spacing } from '@/src/theme/tokens';
 import { formatCompactCurrency, getMonthLabel } from '@/src/utils/format';
 
 export function HomeScreen() {
-  const { user, transactions, categories, report, isOffline } = useAppStore();
+  const { user, transactions, categories, report, weeklyReport, isOffline } = useAppStore();
   const latest = transactions.slice(0, 5);
+
+  const maxWeeklyExpense = Math.max(...(weeklyReport || []), 1);
 
   return (
     <AppScreen scrollable>
@@ -26,6 +28,9 @@ export function HomeScreen() {
         subtitle="Hôm nay Piggy giúp bạn giữ ví gọn hơn"
       />
       {isOffline ? <OfflineBanner /> : null}
+      
+      <WalletSummary />
+
       <MonthSwitcher label={getMonthLabel()} />
 
       <LinearGradient
@@ -54,8 +59,6 @@ export function HomeScreen() {
         </View>
       </LinearGradient>
 
-      <WalletSummary />
-
       <View style={{ flexDirection: 'row', gap: spacing.md, marginTop: spacing.lg }}>
         <StatCard label="Tổng chi" value={report?.totalExpense ?? 0} />
         <StatCard label="Tổng thu" value={report?.totalIncome ?? 0} tone="income" />
@@ -66,17 +69,19 @@ export function HomeScreen() {
           7 ngày gần đây
         </Text>
         <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: spacing.sm, height: 120 }}>
-          {(report?.dailySeries ?? []).map((value, index) => (
+          {(weeklyReport || [0, 0, 0, 0, 0, 0, 0]).map((value, index) => (
             <View key={`${value}-${index}`} style={{ flex: 1, alignItems: 'center', gap: spacing.sm }}>
               <View
                 style={{
                   width: '100%',
-                  height: Math.max(22, value / 2),
-                  backgroundColor: index === 4 ? colors.accentYellow : colors.primary,
+                  height: Math.max(12, (value / maxWeeklyExpense) * 80),
+                  backgroundColor: index === new Date().getDay() - 1 ? colors.accentYellow : colors.primary,
                   borderRadius: radius.pill,
                 }}
               />
-              <Text style={{ color: colors.textMuted, fontSize: 12 }}>T{index + 2}</Text>
+              <Text style={{ color: colors.textMuted, fontSize: 12 }}>
+                {index === 6 ? 'CN' : `T${index + 2}`}
+              </Text>
             </View>
           ))}
         </View>

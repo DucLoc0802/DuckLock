@@ -1,8 +1,18 @@
-import { useMemo, useState } from 'react';
-import { Alert, Pressable, Text, TextInput, View, TouchableOpacity } from 'react-native';
-import { router, useLocalSearchParams } from 'expo-router';
-import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
+import { router, useLocalSearchParams } from 'expo-router';
+import { useEffect, useMemo, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 
 import { AppHeader } from '@/components/ui/AppHeader';
 import { AppScreen } from '@/components/ui/AppScreen';
@@ -11,25 +21,58 @@ import { PrimaryButton } from '@/components/ui/PrimaryButton';
 import { SecondaryButton } from '@/components/ui/SecondaryButton';
 import { useAppStore } from '@/src/store/app-store';
 import { colors, radius, spacing } from '@/src/theme/tokens';
+import { transactionService } from '@/src/services/transactionService';
 
-export function AddTransactionScreen() {
-  const { categories, addTransaction, isOffline, syncCategory } = useAppStore();
-  const { imageUri } = useLocalSearchParams<{ imageUri?: string }>();
-  
+export function EditTransactionScreen() {
+  const { id } = useLocalSearchParams<{ id: string }>();
+  const { categories, updateTransaction, token, isOffline, syncCategory } = useAppStore();
+
   const expenseCategories = useMemo(
     () => categories.filter((item) => item.id !== 'salary'),
     [categories],
   );
+
   const [amount, setAmount] = useState('');
   const [type, setType] = useState<'expense' | 'income'>('expense');
-  const [categoryId, setCategoryId] = useState(expenseCategories[0]?.id ?? '');
-  const [transactionDate, setTransactionDate] = useState(new Date().toISOString().slice(0, 10));
+  const [categoryId, setCategoryId] = useState('');
+  const [transactionDate, setTransactionDate] = useState('');
   const [note, setNote] = useState('');
+  const [imageUri, setImageUri] = useState<string | undefined>(undefined);
+  
   const [loading, setLoading] = useState(false);
+  const [fetching, setFetching] = useState(true);
 
   // Thêm state cho việc tạo danh mục mới
   const [newCategoryName, setNewCategoryName] = useState('');
   const [showNewCategoryInput, setShowNewCategoryInput] = useState(false);
+
+  useEffect(() => {
+    async function loadDetail() {
+      if (!id) return;
+      try {
+        setFetching(true);
+        const data = await transactionService.getTransactionDetail(id, token);
+        if (data) {
+          setAmount(String(data.amount));
+          setType(data.type);
+          setCategoryId(data.categoryId);
+          setTransactionDate(data.transactionDate ? data.transactionDate.slice(0, 10) : new Date().toISOString().slice(0, 10));
+          setNote(data.note || '');
+          setImageUri(data.imageUri || undefined);
+          if (data.rawCategory) {
+            syncCategory(data.rawCategory);
+          }
+        }
+      } catch (error) {
+        console.error('Lỗi khi tải chi tiết giao dịch:', error);
+        Alert.alert('Lỗi', 'Không thể lấy thông tin giao dịch cần sửa');
+        router.back();
+      } finally {
+        setFetching(false);
+      }
+    }
+    loadDetail();
+  }, [id, token]);
 
   function handleSaveNewCategory() {
     if (!newCategoryName.trim()) {
@@ -51,34 +94,45 @@ export function AddTransactionScreen() {
   }
 
   async function onSave() {
-    if (!amount || Number(amount) <= 0 || !categoryId) {
+    if (!amount || Number(amount) <= 0 || !categoryId || !id) {
       Alert.alert('Chưa hợp lệ', 'Hãy nhập số tiền và chọn danh mục');
       return;
     }
 
     try {
       setLoading(true);
-      await addTransaction({
+      await updateTransaction(id, {
         amount: Number(amount),
         categoryId,
         type,
         note,
         transactionDate: new Date(transactionDate).toISOString(),
-        imageUri, // Truyền đường dẫn ảnh vừa chụp xuống store
+        imageUri,
       });
-      Alert.alert('Thành công', isOffline ? 'Đã lưu và chờ đồng bộ' : 'Đã lưu giao dịch');
+      Alert.alert('Thành công', 'Đã cập nhật giao dịch thành công.');
       router.back();
+    } catch (error: any) {
+      Alert.alert('Thất bại', error.message || 'Không thể cập nhật giao dịch');
     } finally {
       setLoading(false);
     }
   }
 
+  if (fetching) {
+    return (
+      <View style={styles.centerContainer}>
+        <ActivityIndicator size="large" color={colors.primaryDark} />
+        <Text style={styles.loadingText}>Đang tải thông tin giao dịch...</Text>
+      </View>
+    );
+  }
+
   return (
     <AppScreen scrollable>
-      <AppHeader title="Thêm giao dịch" subtitle="Nhập nhanh để Piggy ghi nhớ giúp bạn" back />
+      <AppHeader title="Sửa giao dịch" subtitle="Cập nhật thông tin giao dịch của bạn" back />
       {isOffline ? <OfflineBanner /> : null}
 
-      {/* Hiển thị ảnh xem trước nếu được chụp từ Camera truyền sang */}
+      {/* Hiển thị ảnh xem trước nếu có */}
       {imageUri ? (
         <View style={{ position: 'relative', marginBottom: spacing.md }}>
           <Image
@@ -86,9 +140,8 @@ export function AddTransactionScreen() {
             style={{ width: '100%', height: 200, borderRadius: radius.xl }}
             contentFit="cover"
           />
-          {/* Nút bấm hình chữ X để xóa ảnh đính kèm khỏi giao dịch */}
           <TouchableOpacity
-            onPress={() => router.setParams({ imageUri: undefined })}
+            onPress={() => setImageUri(undefined)}
             style={{
               position: 'absolute',
               top: 12,
@@ -250,12 +303,26 @@ export function AddTransactionScreen() {
       </View>
 
       <View style={{ gap: spacing.md, marginTop: spacing.xl }}>
-        <PrimaryButton label="Lưu giao dịch" onPress={onSave} loading={loading} />
+        <PrimaryButton label="Lưu thay đổi" onPress={onSave} loading={loading} />
         <SecondaryButton label="Hủy" onPress={() => router.back()} />
       </View>
     </AppScreen>
   );
 }
+
+const styles = StyleSheet.create({
+  centerContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: spacing.md,
+    backgroundColor: colors.background,
+  },
+  loadingText: {
+    color: colors.textSecondary,
+    fontSize: 15,
+  },
+});
 
 const labelStyle = {
   color: colors.textSecondary,
@@ -270,4 +337,5 @@ const inputStyle = {
   paddingHorizontal: spacing.lg,
   backgroundColor: colors.white,
   height: 56,
+  color: colors.textPrimary,
 } as const;
