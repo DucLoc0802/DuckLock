@@ -6,10 +6,8 @@ export const TransactionsService = {
   createTransaction: async (userId: string, dto: CreateTransactionDto): Promise<any> => {
     // Tìm hoặc Tạo mới danh mục (Category) tương ứng để lấy category_id (tránh lỗi khóa ngoại fk_tx_categories)
     const categoryName = dto.category.trim();
-    const [categories] = await pool.query<any[]>(
-      "SELECT id FROM categories WHERE name = ? AND (user_id = ? OR user_id IS NULL) LIMIT 1",
-      [categoryName, userId]
-    );
+    const query1 = `SELECT id FROM categories WHERE name = ? AND (user_id = ? OR user_id IS NULL) LIMIT 1`
+    const [categories] = await pool.query<any[]>(query1, [categoryName, userId]);
 
     let categoryId: string;
 
@@ -18,10 +16,8 @@ export const TransactionsService = {
     } else {
       // Nếu danh mục chưa tồn tại, tự động tạo mới một danh mục mặc định
       categoryId = randomUUID();
-      await pool.query(
-        "INSERT INTO categories (id, user_id, name, icon, color, is_default) VALUES (?, ?, ?, ?, ?, ?)",
-        [categoryId, userId, categoryName, "📝", "#9E9E9E", false]
-      );
+      const query2 = `INSERT INTO categories (id, user_id, name, icon, color, is_default) VALUES (?, ?, ?, ?, ?, ?)`
+      await pool.query(query2, [categoryId, userId, categoryName, "📝", "#9E9E9E", false]);
     }
 
     // Chuẩn bị các giá trị chèn giao dịch
@@ -29,15 +25,18 @@ export const TransactionsService = {
     const currency = "VND"; // Mặc định tiền tệ của giao dịch
     const amountInDefaultCurrency = dto.amount; // Mặc định tỉ giá 1:1 khi chưa có API tỉ giá
 
+    const query3 = `INSERT INTO transactions 
+       (id, user_id, category_id, wallet_id, proof_image_id, amount, currency, amount_in_default_currency, type, transaction_date, description) 
+       VALUES (?, ?, ?, ?, NULL, ?, ?, ?, ?, ?)`
     // INSERT giao dịch mới vào MySQL
     await pool.query(
-      `INSERT INTO transactions 
-       (id, user_id, category_id, proof_image_id, amount, currency, amount_in_default_currency, type, transaction_date, description) 
-       VALUES (?, ?, ?, NULL, ?, ?, ?, ?, ?, ?)` ,
+      query3,
       [
         txId,
         userId,
         categoryId,
+        dto.walletId,
+        dto.proofImage,
         dto.amount,
         currency,
         amountInDefaultCurrency,
@@ -46,6 +45,22 @@ export const TransactionsService = {
         dto.description || ""
       ]
     );
+
+    if (dto.type === "expense") {
+      const query4 = `UPDATE wallets 
+    SET balance = balance - ?
+    WHERE user_id = ?
+    AND id = ?`
+      await pool.query(query4, [dto.amount, userId, dto.walletId]);
+    }
+
+    else {
+      const query4 = `UPDATE wallets 
+    SET balance = balance + ?
+    WHERE user_id = ?
+    AND id = ?`
+      await pool.query(query4, [dto.amount, userId, dto.walletId]);
+    }
 
     // Trả về đối tượng giao dịch đã tạo
     return {
@@ -58,7 +73,8 @@ export const TransactionsService = {
       },
       transactionDate: dto.transactionDate,
       description: dto.description || "",
-      type: dto.type.toLowerCase()
+      type: dto.type.toLowerCase(),
+      walletId: dto.walletId
     };
   },
 
@@ -66,7 +82,7 @@ export const TransactionsService = {
     const query = `SELECT 
       t.id, t.amount, t.currency, t.type, t.transaction_date, t.description,
       c.id AS category_id, c.name AS category_name, c.icon AS category_icon, c.color AS category_color,
-      pi.image_url AS image_url
+      pi.image_url AS image_url, t.wallet_id
     FROM transactions t
     LEFT JOIN categories c ON t.category_id = c.id
     LEFT JOIN proof_images pi ON t.proof_image_id = pi.id
@@ -88,6 +104,7 @@ export const TransactionsService = {
       transactionDate: tx.transaction_date,
       description: tx.description,
       imageUri: tx.image_url || null, // Ánh xạ cột image_url thành imageUri
+      walletId: tx.wallet_id,
       category: tx.category_id ? {
         id: tx.category_id,
         name: tx.category_name,

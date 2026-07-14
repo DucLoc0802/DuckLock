@@ -25,7 +25,7 @@ import { transactionService } from '@/src/services/transactionService';
 
 export function EditTransactionScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { categories, updateTransaction, token, isOffline, syncCategory } = useAppStore();
+  const { categories, updateTransaction, token, isOffline, syncCategory, wallets } = useAppStore();
 
   const expenseCategories = useMemo(
     () => categories.filter((item) => item.id !== 'salary'),
@@ -38,6 +38,7 @@ export function EditTransactionScreen() {
   const [transactionDate, setTransactionDate] = useState('');
   const [note, setNote] = useState('');
   const [imageUri, setImageUri] = useState<string | undefined>(undefined);
+  const [selectedWalletId, setSelectedWalletId] = useState('');
   
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(true);
@@ -59,6 +60,7 @@ export function EditTransactionScreen() {
           setTransactionDate(data.transactionDate ? data.transactionDate.slice(0, 10) : new Date().toISOString().slice(0, 10));
           setNote(data.note || '');
           setImageUri(data.imageUri || undefined);
+          setSelectedWalletId(data.walletId || '');
           if (data.rawCategory) {
             syncCategory(data.rawCategory);
           }
@@ -94,22 +96,23 @@ export function EditTransactionScreen() {
   }
 
   async function onSave() {
-    if (!amount || Number(amount) <= 0 || !categoryId || !id) {
-      Alert.alert('Chưa hợp lệ', 'Hãy nhập số tiền và chọn danh mục');
-      return;
-    }
+      if (!selectedWalletId) {
+        Alert.alert('Chưa hợp lệ', 'Vui lòng chọn tài khoản hoặc ví thanh toán');
+        return;
+      }
 
-    try {
-      setLoading(true);
-      await updateTransaction(id, {
-        amount: Number(amount),
-        categoryId,
-        type,
-        note,
-        transactionDate: new Date(transactionDate).toISOString(),
-        imageUri,
-      });
-      Alert.alert('Thành công', 'Đã cập nhật giao dịch thành công.');
+      try {
+        setLoading(true);
+        await updateTransaction(id, {
+          amount: Number(amount),
+          categoryId,
+          type,
+          note,
+          transactionDate: new Date(transactionDate).toISOString(),
+          walletId: selectedWalletId,
+          imageUri,
+        });
+        Alert.alert('Thành công', 'Đã cập nhật giao dịch thành công.');
       router.back();
     } catch (error: any) {
       Alert.alert('Thất bại', error.message || 'Không thể cập nhật giao dịch');
@@ -166,6 +169,34 @@ export function EditTransactionScreen() {
             placeholder="0"
             style={[inputStyle, { fontSize: 28, fontWeight: '800' }]}
           />
+        </View>
+
+        {/* BỘ CHỌN TÀI KHOẢN VÍ THANH TOÁN */}
+        <View>
+          <Text style={labelStyle}>Tài khoản / Ví thanh toán</Text>
+          {wallets.length === 0 ? (
+            <Text style={{ color: colors.textMuted, fontSize: 13 }}>Đang tải danh sách ví của bạn...</Text>
+          ) : (
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
+              {wallets.map((wallet) => (
+                <Pressable
+                  key={wallet.id}
+                  onPress={() => setSelectedWalletId(wallet.id)}
+                  style={{
+                    paddingHorizontal: spacing.md,
+                    paddingVertical: spacing.sm,
+                    borderRadius: radius.pill,
+                    backgroundColor: selectedWalletId === wallet.id ? colors.primarySoft : colors.surface,
+                    borderWidth: 1,
+                    borderColor: selectedWalletId === wallet.id ? colors.primaryDark : colors.border,
+                  }}>
+                  <Text style={{ fontWeight: '700', color: colors.textPrimary, fontSize: 13 }}>
+                    {wallet.type === 'CASH' ? '💵' : wallet.type === 'SAVING' ? '📈' : '💳'} {wallet.name}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          )}
         </View>
 
         <View>

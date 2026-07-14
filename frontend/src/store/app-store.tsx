@@ -13,7 +13,9 @@ import {
   ReportSummary,
   Transaction,
   User,
+  Wallet,
 } from '@/src/types/piggy';
+import { walletService } from '@/src/services/walletService';
 
 interface AppStoreValue {
   authState: AsyncState;
@@ -25,6 +27,8 @@ interface AppStoreValue {
   report: ReportSummary | null;
   weeklyReport: number[];
   isOffline: boolean;
+  wallets: Wallet[];
+  loadWallets: () => Promise<void>;
   login: (email: string, password: string) => Promise<void>;
   register: (name: string, email: string, password: string) => Promise<void>;
   logout: () => void;
@@ -48,6 +52,13 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
   const [report, setReport] = useState<ReportSummary | null>(null);
   const [weeklyReport, setWeeklyReport] = useState<number[]>([0, 0, 0, 0, 0, 0, 0]);
   const [isOffline, setIsOffline] = useState(false);
+  const [wallets, setWallets] = useState<Wallet[]>([]);
+
+  async function loadWallets() {
+    if (!token) return;
+    const data = await walletService.listWallets(token);
+    setWallets(data);
+  }
 
   // 1. Tự động tải lại dữ liệu khi Token thay đổi (Người dùng đã Đăng nhập thành công)
   useEffect(() => {
@@ -55,6 +66,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
     categoryService.listCategories().then(setCategories);
     
     if (token) {
+      loadWallets();
       // KẾT NỐI THẬT: Lấy danh sách giao dịch từ MySQL Backend
       transactionService.listTransactions(token).then((txs) => {
         setTransactions(txs);
@@ -87,6 +99,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
     } else {
       // Nếu đăng xuất, xóa sạch danh sách giao dịch hiển thị
       setTransactions([]);
+      setWallets([]);
     }
   }, [token]);
 
@@ -135,17 +148,20 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
     // Truyền thêm biến token và categoryName để lưu vào DB MySQL
     const created = await transactionService.createTransaction(input, token, isOffline, categoryName);
     setTransactions((current) => [created, ...current]);
+    loadWallets(); // Cập nhật lại số dư ví
   }
 
   async function updateTransaction(id: string, input: CreateTransactionInput) {
     const categoryName = categories.find((c) => c.id === input.categoryId)?.name || 'Khác';
     const updated = await transactionService.updateTransaction(id, input, token, categoryName);
     setTransactions((current) => current.map((t) => (t.id === id ? updated : t)));
+    loadWallets(); // Cập nhật lại số dư ví
   }
 
   async function deleteTransaction(id: string) {
     await transactionService.deleteTransaction(id, token);
     setTransactions((current) => current.filter((tx) => tx.id !== id));
+    loadWallets(); // Cập nhật lại số dư ví
   }
 
   async function uploadProofImage(imageUri: string) {
@@ -176,6 +192,8 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
         report,
         weeklyReport,
         isOffline,
+        wallets,
+        loadWallets,
         login,
         register,
         logout,

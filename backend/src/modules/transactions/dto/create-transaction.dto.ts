@@ -6,4 +6,8 @@ export interface CreateTransactionDto {
   transactionDate: Date;
   description?: string;
   type: TransactionType;
+  walletId: string;
+  proofImage?: Buffer;
+  expenseCategoryId?: string;
+  incomeCategoryId?: string;
 }

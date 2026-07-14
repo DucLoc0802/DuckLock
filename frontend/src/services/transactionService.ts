@@ -95,6 +95,7 @@ export const transactionService = {
         transactionDate: input.transactionDate.slice(0, 10), // Cắt lấy chuỗi ngày dạng YYYY-MM-DD
         description: input.note,
         type: input.type,
+        walletId: input.walletId,
       }),
     });
 
@@ -173,6 +174,7 @@ export const transactionService = {
       note: result.data.description || '',
       transactionDate: result.data.transactionDate,
       imageUri: result.data.imageUri || null,
+      walletId: result.data.walletId,
       rawCategory: result.data.category ? {
         id: result.data.category.id,
         name: result.data.category.name || 'Khác',
@@ -206,6 +208,7 @@ export const transactionService = {
         transactionDate: input.transactionDate.slice(0, 10),
         description: input.note,
         type: input.type,
+        walletId: input.walletId,
       }),
     });
 

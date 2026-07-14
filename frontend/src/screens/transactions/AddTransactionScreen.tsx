@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Alert, Pressable, Text, TextInput, View, TouchableOpacity } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Image } from 'expo-image';
@@ -13,7 +13,7 @@ import { useAppStore } from '@/src/store/app-store';
 import { colors, radius, spacing } from '@/src/theme/tokens';
 
 export function AddTransactionScreen() {
-  const { categories, addTransaction, isOffline, syncCategory } = useAppStore();
+  const { categories, addTransaction, isOffline, syncCategory, wallets } = useAppStore();
   const { imageUri } = useLocalSearchParams<{ imageUri?: string }>();
   
   const expenseCategories = useMemo(
@@ -26,6 +26,16 @@ export function AddTransactionScreen() {
   const [transactionDate, setTransactionDate] = useState(new Date().toISOString().slice(0, 10));
   const [note, setNote] = useState('');
   const [loading, setLoading] = useState(false);
+
+  // State cho việc chọn ví
+  const [selectedWalletId, setSelectedWalletId] = useState('');
+
+  // Tự động chọn ví đầu tiên nếu có
+  useEffect(() => {
+    if (wallets.length > 0 && !selectedWalletId) {
+      setSelectedWalletId(wallets[0].id);
+    }
+  }, [wallets, selectedWalletId]);
 
   // Thêm state cho việc tạo danh mục mới
   const [newCategoryName, setNewCategoryName] = useState('');
@@ -56,6 +66,11 @@ export function AddTransactionScreen() {
       return;
     }
 
+    if (!selectedWalletId) {
+      Alert.alert('Chưa hợp lệ', 'Vui lòng chọn tài khoản hoặc ví thanh toán');
+      return;
+    }
+
     try {
       setLoading(true);
       await addTransaction({
@@ -64,6 +79,7 @@ export function AddTransactionScreen() {
         type,
         note,
         transactionDate: new Date(transactionDate).toISOString(),
+        walletId: selectedWalletId,
         imageUri, // Truyền đường dẫn ảnh vừa chụp xuống store
       });
       Alert.alert('Thành công', isOffline ? 'Đã lưu và chờ đồng bộ' : 'Đã lưu giao dịch');
@@ -113,6 +129,34 @@ export function AddTransactionScreen() {
             placeholder="0"
             style={[inputStyle, { fontSize: 28, fontWeight: '800' }]}
           />
+        </View>
+
+        {/* BỘ CHỌN TÀI KHOẢN VÍ THANH TOÁN */}
+        <View>
+          <Text style={labelStyle}>Tài khoản / Ví thanh toán</Text>
+          {wallets.length === 0 ? (
+            <Text style={{ color: colors.textMuted, fontSize: 13 }}>Đang tải danh sách ví của bạn...</Text>
+          ) : (
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
+              {wallets.map((wallet) => (
+                <Pressable
+                  key={wallet.id}
+                  onPress={() => setSelectedWalletId(wallet.id)}
+                  style={{
+                    paddingHorizontal: spacing.md,
+                    paddingVertical: spacing.sm,
+                    borderRadius: radius.pill,
+                    backgroundColor: selectedWalletId === wallet.id ? colors.primarySoft : colors.surface,
+                    borderWidth: 1,
+                    borderColor: selectedWalletId === wallet.id ? colors.primaryDark : colors.border,
+                  }}>
+                  <Text style={{ fontWeight: '700', color: colors.textPrimary, fontSize: 13 }}>
+                    {wallet.type === 'CASH' ? '💵' : wallet.type === 'SAVING' ? '📈' : '💳'} {wallet.name}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          )}
         </View>
 
         <View>

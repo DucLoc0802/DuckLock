@@ -56,6 +56,7 @@ export interface CreateTransactionInput {
   type: TransactionType;
   note: string;
   transactionDate: string;
+  walletId: string;
   imageUri?: string;
 }
 

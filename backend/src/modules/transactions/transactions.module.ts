@@ -1,7 +1,10 @@
 import { Router } from "express";
 import { TransactionsController } from "./transactions.controller";
+import { authenticateJWT } from "../../middlewares/auth.middleware";
 
 const router = Router();
+
+router.use(authenticateJWT);
 
 router.post("/", TransactionsController.createTransaction);
 router.get("/:id", TransactionsController.getTransactionById);
