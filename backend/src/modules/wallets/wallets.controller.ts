@@ -84,4 +84,37 @@ export const WalletsController = {
       });
     }
   },
+
+  calculateInterest: async (req: Request, res: Response) => {
+    try {
+      const userId = req.userId!;
+      const result = await WalletsService.calculateInterest(userId);
+      return res.status(200).json({
+        success: true,
+        data: result,
+      });
+    } catch (error: any) {
+      return res.status(500).json({
+        success: false,
+        message: error.message || "Internal server error",
+      });
+    }
+  },
+
+  collectInterest: async (req: Request, res: Response) => {
+    try {
+      const userId = req.userId!;
+      const { wallet_id, period } = req.body;
+      const result = await WalletsService.collectInterest(userId, wallet_id, period);
+      return res.status(200).json({
+        success: true,
+        data: result,
+      });
+    } catch (error: any) {
+      return res.status(500).json({
+        success: false,
+        message: error.message || "Internal server error",
+      });
+    }
+  },
 };

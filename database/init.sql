@@ -112,6 +112,7 @@ CREATE TABLE wallets (
 
 -- Chỉ dùng cho loại SAVING
 
+
 interest_rate_percent DECIMAL(5, 2) NULL,
 
     note VARCHAR(200) NULL,
@@ -192,6 +193,7 @@ scope_category_id VARCHAR(36) GENERATED ALWAYS AS (COALESCE(category_id, 'ALL'))
 
 -- Chỉ enforce unique với budget chưa bị soft-delete
 
+
 active_key TINYINT GENERATED ALWAYS AS (
         CASE 
             WHEN deleted_at IS NULL THEN 1 
@@ -266,4 +268,38 @@ CREATE TABLE transactions (
     CONSTRAINT fk_tx_users FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
     CONSTRAINT fk_tx_categories FOREIGN KEY (category_id) REFERENCES categories (id) ON DELETE SET NULL,
     CONSTRAINT fk_tx_images FOREIGN KEY (proof_image_id) REFERENCES proof_images (id) ON DELETE SET NULL
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+
+
+CREATE TABLE recurring_transactions (
+    id VARCHAR(36) PRIMARY KEY DEFAULT(UUID()),
+    user_id VARCHAR(36) NOT NULL,
+    wallet_id VARCHAR(36) NOT NULL,
+    category_id VARCHAR(36) NULL,
+    
+    name VARCHAR(100) NOT NULL, -- Ví dụ: "Tiền nhà", "Netflix"
+    amount DECIMAL(15, 2) NOT NULL,
+    type ENUM('EXPENSE', 'INCOME') NOT NULL,
+    description TEXT NULL,
+
+-- Tần suất lặp: Hàng ngày, hàng tuần, hàng tháng, hàng năm
+frequency ENUM( 'DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY' ) NOT NULL,
+
+-- Ngày thực hiện lặp (ví dụ: ngày 5 hàng tháng, hoặc thứ 2 hàng tuần)
+day_of_period INT NOT NULL, 
+
+    start_date DATE NOT NULL, -- Ngày bắt đầu lịch trình
+    end_date DATE NULL,       -- Ngày kết thúc (NULL nếu lặp vô hạn)
+    
+    last_executed_at DATE NULL,       -- Lần gần nhất hệ thống tự động chèn giao dịch
+    next_execution_date DATE NOT NULL, -- Ngày tiếp theo cần chèn giao dịch
+    
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMP NULL,
+
+    CONSTRAINT fk_recurring_users FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
+    CONSTRAINT fk_recurring_wallets FOREIGN KEY (wallet_id) REFERENCES wallets (id) ON DELETE CASCADE,
+    CONSTRAINT fk_recurring_categories FOREIGN KEY (category_id) REFERENCES categories (id) ON DELETE SET NULL
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;

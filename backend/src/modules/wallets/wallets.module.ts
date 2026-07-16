@@ -6,6 +6,8 @@ const router = Router();
 
 router.use(authenticateJWT);
 
+router.get("/calculate-interest", WalletsController.calculateInterest);
+router.post("/collect-interest", WalletsController.collectInterest);
 router.get("/", WalletsController.getAllWallets);
 router.get("/:id", WalletsController.getWalletById);
 router.post("/", WalletsController.createWallet);

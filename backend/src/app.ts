@@ -4,6 +4,8 @@ import { AuthModule } from "./modules/auth/auth.module";
 import { TransactionsModule } from "./modules/transactions/transactions.module";
 import { WalletModule } from "./modules/wallets/wallets.module";
 import { ReportsModule } from "./modules/reports/reports.module";
+import { BudgetModule } from "./modules/budgets/budgets.module";
+import { RecurringTransactionModule } from "./modules/recurring_transactions/recurring-transactions.module";
 
 const app = express();
 
@@ -28,6 +30,8 @@ app.use("/api/auth", AuthModule.router);
 app.use("/api/transactions", TransactionsModule.router);
 app.use("/api/wallets", WalletModule.router);
 app.use("/api/reports", ReportsModule.router);
+app.use("/api/budgets", BudgetModule.router);
+app.use("/api/recurring-transactions", RecurringTransactionModule.router);
 // Xử lý Route không tìm thấy (404 Handler)
 app.use((req, res) =>
   res.status(404).json({ message: `Route ${req.originalUrl} not found` })

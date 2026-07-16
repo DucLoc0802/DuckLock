@@ -27,7 +27,7 @@ export const TransactionsService = {
 
     const query3 = `INSERT INTO transactions 
        (id, user_id, category_id, wallet_id, proof_image_id, amount, currency, amount_in_default_currency, type, transaction_date, description) 
-       VALUES (?, ?, ?, ?, NULL, ?, ?, ?, ?, ?)`
+       VALUES (?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?)`
     // INSERT giao dịch mới vào MySQL
     await pool.query(
       query3,
@@ -117,17 +117,23 @@ export const TransactionsService = {
 
   deleteTransaction: async (id: string, userId: string): Promise<any> => {
     // Sửa câu SQL để kiểm tra user_id bảo mật
-    const query = `UPDATE transactions 
+    const query1 = `UPDATE transactions 
     SET deleted_at = NOW() 
     WHERE id = ? AND user_id = ?
     AND deleted_at IS NULL 
     LIMIT 1`;
 
-    const [result] = await pool.query<any>(query, [id, userId]);
+    const [result] = await pool.query<any>(query1, [id, userId]);
     if (result.affectedRows === 0) {
       throw new Error("Không tìm thấy giao dịch");
     }
 
+    const query2 = `UPDATE wallets
+    set balance = balance - ?
+    where user_id = ?
+    and id = ?
+    and type = 'BANK`
+    await pool.query(query2, [result.amount, userId, result.walletId]);
     return {
       success: true,
       message: "Xóa giao dịch thành công"
