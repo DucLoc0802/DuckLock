@@ -35,6 +35,12 @@ export const TransactionsController = {
           message: "Loại giao dịch phải là expense hoặc income",
         });
       }
+      if (!walletId) {
+        return res.status(400).json({
+          success: false,
+          message: "Vui lòng chọn ví giao dịch",
+        });
+      }
 
       const transaction = await TransactionsService.createTransaction(userId, {
         amount,

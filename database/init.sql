@@ -1,15 +1,14 @@
 USE DuckLock;
 
+-- Xóa các bảng theo thứ tự để tránh lỗi ràng buộc khóa ngoại (Foreign Key Constraints)
+DROP TABLE IF EXISTS recurring_transactions;
 DROP TABLE IF EXISTS transactions;
-
+DROP TABLE IF EXISTS budgets;
+DROP TABLE IF EXISTS wallets;
 DROP TABLE IF EXISTS proof_images;
-
 DROP TABLE IF EXISTS categories;
-
 DROP TABLE IF EXISTS refresh_tokens;
-
 DROP TABLE IF EXISTS oauth_accounts;
-
 DROP TABLE IF EXISTS users;
 
 -- 1. BẢNG USERS
@@ -242,6 +241,7 @@ CREATE TABLE transactions (
     id VARCHAR(36) PRIMARY KEY DEFAULT(UUID()),
     user_id VARCHAR(36) NOT NULL,
     category_id VARCHAR(36) NULL,
+    wallet_id VARCHAR(36) NOT NULL, -- Liên kết với ví giao dịch
     proof_image_id VARCHAR(36) NULL,
     amount DECIMAL(15, 2) NOT NULL,
     currency CHAR(3) NOT NULL DEFAULT 'VND',
@@ -263,10 +263,12 @@ CREATE TABLE transactions (
         category_id
     ),
     INDEX idx_tx_category_id (category_id),
+    INDEX idx_tx_wallet_id (wallet_id),
     INDEX idx_tx_proof_image_id (proof_image_id),
     FULLTEXT INDEX idx_tx_description (description),
     CONSTRAINT fk_tx_users FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
     CONSTRAINT fk_tx_categories FOREIGN KEY (category_id) REFERENCES categories (id) ON DELETE SET NULL,
+    CONSTRAINT fk_tx_wallets FOREIGN KEY (wallet_id) REFERENCES wallets (id) ON DELETE CASCADE,
     CONSTRAINT fk_tx_images FOREIGN KEY (proof_image_id) REFERENCES proof_images (id) ON DELETE SET NULL
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
 
@@ -286,6 +288,7 @@ CREATE TABLE recurring_transactions (
 frequency ENUM( 'DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY' ) NOT NULL,
 
 -- Ngày thực hiện lặp (ví dụ: ngày 5 hàng tháng, hoặc thứ 2 hàng tuần)
+
 day_of_period INT NOT NULL, 
 
     start_date DATE NOT NULL, -- Ngày bắt đầu lịch trình

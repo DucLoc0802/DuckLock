@@ -38,3 +38,45 @@ app.use((req, res) =>
 );
 
 export default app;
+
+// Middleware xử lý lỗi tập trung (Đặt dưới cùng các Route)
+app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  console.error("🔥 System Error Log:", err); // Log lỗi ra console để debug
+
+  // 1. Phân loại và xử lý tập trung lỗi của MySQL
+  if (err.errno) {
+    let message = "Đã xảy ra lỗi cơ sở dữ liệu!";
+    let statusCode = 400;
+
+    switch (err.errno) {
+      case 3819: // CHECK constraint
+        if (err.message.includes('chk_wallet_balance_non_negative')) {
+          message = "Số dư ví tài khoản không đủ để thực hiện giao dịch!";
+        } else {
+          message = "Giá trị nhập vào vượt quá giới hạn cho phép!";
+        }
+        break;
+      case 1062: // UNIQUE constraint
+        message = "Dữ liệu này đã tồn tại trên hệ thống!";
+        break;
+      case 1452: // FOREIGN KEY fail (khi insert)
+        message = "Liên kết dữ liệu không hợp lệ (Ví hoặc Danh mục không tồn tại)!";
+        break;
+      case 1451: // FOREIGN KEY fail (khi delete)
+        message = "Không thể xóa dữ liệu này vì đang có thông tin khác liên kết sử dụng!";
+        break;
+    }
+
+    return res.status(statusCode).json({
+      success: false,
+      message: message
+    });
+  }
+
+  // 2. Xử lý các lỗi nghiệp vụ tự định nghĩa (Business logic error)
+  return res.status(500).json({
+    success: false,
+    message: err.message || "Đã xảy ra lỗi hệ thống!"
+  });
+
+});

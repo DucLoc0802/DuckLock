@@ -1,4 +1,5 @@
 import { pool } from "../../config/db";
+import { AppError } from "../../utils/app-errors";
 import { CreateTransactionDto } from "./dto/create-transaction.dto";
 import { randomUUID } from "crypto";
 
@@ -27,7 +28,7 @@ export const TransactionsService = {
 
     const query3 = `INSERT INTO transactions 
        (id, user_id, category_id, wallet_id, proof_image_id, amount, currency, amount_in_default_currency, type, transaction_date, description) 
-       VALUES (?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?)`
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     // INSERT giao dịch mới vào MySQL
     await pool.query(
       query3,
@@ -46,22 +47,27 @@ export const TransactionsService = {
       ]
     );
 
-    if (dto.type === "expense") {
+    const checkQuery = `select balance 
+    from wallets 
+    where user_id = ? 
+    and id = ?`;
+    const [check] = await pool.query<any>(checkQuery, [userId, dto.walletId]);
+
+    if (dto.type === "expense" && check[0].balance >= dto.amount) {
       const query4 = `UPDATE wallets 
     SET balance = balance - ?
     WHERE user_id = ?
     AND id = ?`
       await pool.query(query4, [dto.amount, userId, dto.walletId]);
-    }
-
-    else {
+    } else if (dto.type === "income") {
       const query4 = `UPDATE wallets 
     SET balance = balance + ?
     WHERE user_id = ?
     AND id = ?`
       await pool.query(query4, [dto.amount, userId, dto.walletId]);
+    } else {
+      throw new AppError(400, "Không tìm thấy ví hoặc số dư không đủ");
     }
-
     // Trả về đối tượng giao dịch đã tạo
     return {
       id: txId,
