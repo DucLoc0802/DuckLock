@@ -1,126 +1,60 @@
 import { Request, Response } from "express";
 import { RecurringTransactionsService } from "./recurring-transactions.service";
+import { asyncHandler } from "../../utils/async-handler";
+import { AppError } from "../../utils/app-errors";
 
 export const RecurringTransactionsController = {
-    createRecurringTransaction: async (req: Request, res: Response) => {
-        try {
-            const userId = req.userId!;
-            const { walletId, categoryId, name, amount, type, description, frequency, dayOfPeriod, startDate, endDate, nextExecutionDate } = req.body;
-            const result = await RecurringTransactionsService.createRecurringTransaction(userId, {
-                walletId, categoryId, name, amount, type, description, frequency, dayOfPeriod, startDate, endDate, nextExecutionDate,
-            });
-            return res.status(201).json({
-                success: true,
-                data: result,
-            });
-        } catch (error: any) {
-            return res.status(500).json({
-                success: false,
-                message: error.message || "Internal server error",
-            });
-        }
-    },
+    createRecurringTransaction: asyncHandler(async (req: Request, res: Response) => {
+        const userId = req.userId!;
+        const { walletId, categoryId, name, amount, type, description, frequency, dayOfPeriod, startDate, endDate, nextExecutionDate } = req.body;
+        if (!walletId || !name || !amount || !type || !frequency || !dayOfPeriod || !startDate || !nextExecutionDate)
+            throw new AppError(400, "Vui lòng nhập đầy đủ thông tin giao dịch định kỳ");
+        const result = await RecurringTransactionsService.createRecurringTransaction(userId, {
+            walletId, categoryId, name, amount, type, description, frequency, dayOfPeriod, startDate, endDate, nextExecutionDate,
+        });
+        return res.status(201).json({ success: true, data: result });
+    }),
 
-    listRecurringTransactions: async (req: Request, res: Response) => {
-        try {
-            const userId = req.userId!;
-            const result = await RecurringTransactionsService.listRecurringTransactions(userId);
-            return res.status(200).json({
-                success: true,
-                data: result,
-            });
-        } catch (error: any) {
-            return res.status(500).json({
-                success: false,
-                message: error.message || "Internal server error",
-            });
-        }
-    },
+    listRecurringTransactions: asyncHandler(async (req: Request, res: Response) => {
+        const userId = req.userId!;
+        const result = await RecurringTransactionsService.listRecurringTransactions(userId);
+        return res.status(200).json({ success: true, data: result });
+    }),
 
-    getRecurringTransactionById: async (req: Request, res: Response) => {
-        try {
-            const userId = req.userId!;
-            const { id } = req.params;
-            const result = await RecurringTransactionsService.getRecurringTransactionById(userId, id);
-            return res.status(200).json({
-                success: true,
-                data: result,
-            });
-        } catch (error: any) {
-            return res.status(500).json({
-                success: false,
-                message: error.message || "Internal server error",
-            });
-        }
-    },
+    getRecurringTransactionById: asyncHandler(async (req: Request, res: Response) => {
+        const userId = req.userId!;
+        const { id } = req.params;
+        const result = await RecurringTransactionsService.getRecurringTransactionById(userId, id);
+        return res.status(200).json({ success: true, data: result });
+    }),
 
-    updateRecurringTransaction: async (req: Request, res: Response) => {
-        try {
-            const userId = req.userId!;
-            const { id } = req.params;
-            const { walletId, categoryId, name, amount, type, description, frequency, dayOfPeriod, startDate, endDate, nextExecutionDate, isActive } = req.body;
-            const result = await RecurringTransactionsService.updateRecurringTransaction(userId, id, {
-                walletId, categoryId, name, amount, type, description, frequency, dayOfPeriod, startDate, endDate, nextExecutionDate, isActive,
-            });
-            return res.status(200).json({
-                success: true,
-                data: result,
-            });
-        } catch (error: any) {
-            return res.status(500).json({
-                success: false,
-                message: error.message || "Internal server error",
-            });
-        }
-    },
+    updateRecurringTransaction: asyncHandler(async (req: Request, res: Response) => {
+        const userId = req.userId!;
+        const { id } = req.params;
+        const { walletId, categoryId, name, amount, type, description, frequency, dayOfPeriod, startDate, endDate, nextExecutionDate, isActive } = req.body;
+        const result = await RecurringTransactionsService.updateRecurringTransaction(userId, id, {
+            walletId, categoryId, name, amount, type, description, frequency, dayOfPeriod, startDate, endDate, nextExecutionDate, isActive,
+        });
+        return res.status(200).json({ success: true, data: result });
+    }),
 
-    deleteRecurringTransaction: async (req: Request, res: Response) => {
-        try {
-            const userId = req.userId!;
-            const { id } = req.params;
-            const result = await RecurringTransactionsService.deleteRecurringTransaction(userId, id);
-            return res.status(200).json({
-                success: true,
-                data: result,
-            });
-        } catch (error: any) {
-            return res.status(500).json({
-                success: false,
-                message: error.message || "Internal server error",
-            });
-        }
-    },
+    deleteRecurringTransaction: asyncHandler(async (req: Request, res: Response) => {
+        const userId = req.userId!;
+        const { id } = req.params;
+        const result = await RecurringTransactionsService.deleteRecurringTransaction(userId, id);
+        return res.status(200).json({ success: true, data: result });
+    }),
 
-    getDueRecurringTransactions: async (req: Request, res: Response) => {
-        try {
-            const userId = req.userId!;
-            const result = await RecurringTransactionsService.getDueRecurringTransactions(userId);
-            return res.status(200).json({
-                success: true,
-                data: result,
-            });
-        } catch (error: any) {
-            return res.status(500).json({
-                success: false,
-                message: error.message || "Internal server error",
-            });
-        }
-    },
+    getDueRecurringTransactions: asyncHandler(async (req: Request, res: Response) => {
+        const userId = req.userId!;
+        const result = await RecurringTransactionsService.getDueRecurringTransactions(userId);
+        return res.status(200).json({ success: true, data: result });
+    }),
 
-    confirmRecurringTransaction: async (req: Request, res: Response) => {
-        try {
-            const userId = req.userId!;
-            const { id } = req.params;
-            const result = await RecurringTransactionsService.confirmRecurringTransaction(userId, id);
-            return res.status(200).json({
-                success: true,
-                data: result,
-            });
-        } catch (error: any) {
-            return res.status(500).json({
-                success: false,
-                message: error.message || "Internal server error",
-            });
-        }
-    },
+    confirmRecurringTransaction: asyncHandler(async (req: Request, res: Response) => {
+        const userId = req.userId!;
+        const { id } = req.params;
+        const result = await RecurringTransactionsService.confirmRecurringTransaction(userId, id);
+        return res.status(200).json({ success: true, data: result });
+    }),
 };

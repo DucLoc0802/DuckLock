@@ -2,13 +2,21 @@ USE DuckLock;
 
 -- Xóa các bảng theo thứ tự để tránh lỗi ràng buộc khóa ngoại (Foreign Key Constraints)
 DROP TABLE IF EXISTS recurring_transactions;
+
 DROP TABLE IF EXISTS transactions;
+
 DROP TABLE IF EXISTS budgets;
+
 DROP TABLE IF EXISTS wallets;
+
 DROP TABLE IF EXISTS proof_images;
+
 DROP TABLE IF EXISTS categories;
+
 DROP TABLE IF EXISTS refresh_tokens;
+
 DROP TABLE IF EXISTS oauth_accounts;
+
 DROP TABLE IF EXISTS users;
 
 -- 1. BẢNG USERS
@@ -91,74 +99,41 @@ CREATE TABLE proof_images (
 
 -- 2. BẢNG WALLETS
 
-
 CREATE TABLE wallets (
     id VARCHAR(36) PRIMARY KEY DEFAULT(UUID()),
-
     user_id VARCHAR(36) NOT NULL,
-
     name VARCHAR(100) NOT NULL,
-
     type ENUM(
         'CASH',
         'BANK',
         'SAVING',
         'OTHER'
     ) NOT NULL DEFAULT 'CASH',
-
     balance DECIMAL(15, 2) NOT NULL DEFAULT 0.00,
     currency CHAR(3) NOT NULL DEFAULT 'VND',
-
--- Chỉ dùng cho loại SAVING
-
-
-interest_rate_percent DECIMAL(5, 2) NULL,
-
+    -- Chỉ dùng cho loại SAVING
+    interest_rate_percent DECIMAL(5, 2) NULL,
     note VARCHAR(200) NULL,
-
     is_default BOOLEAN NOT NULL DEFAULT FALSE,
     sort_order SMALLINT NOT NULL DEFAULT 0,
-
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     deleted_at TIMESTAMP NULL,
-
     active_key TINYINT GENERATED ALWAYS AS (
-        CASE 
-            WHEN deleted_at IS NULL THEN 1 
-            ELSE NULL 
+        CASE
+            WHEN deleted_at IS NULL THEN 1
+            ELSE NULL
         END
     ) VIRTUAL,
-
-    UNIQUE KEY uidx_wallet_user_name_active (
-        user_id,
-        name,
-        active_key
-    ),
-
-    INDEX idx_wallets_user_id (
-        user_id,
-        deleted_at
-    ),
-
-    INDEX idx_wallets_user_type (
-        user_id,
-        type,
-        deleted_at
-    ),
-
-    CONSTRAINT fk_wallets_users 
-        FOREIGN KEY (user_id) REFERENCES users (id) 
-        ON DELETE CASCADE,
-
-    CONSTRAINT chk_wallet_balance_non_negative 
-        CHECK (balance >= 0),
-
-    CONSTRAINT chk_wallet_interest_rate 
-        CHECK (
-            interest_rate_percent IS NULL 
-            OR interest_rate_percent >= 0
-        )
+    UNIQUE KEY uidx_wallet_user_name_active (user_id, name, active_key),
+    INDEX idx_wallets_user_id (user_id, deleted_at),
+    INDEX idx_wallets_user_type (user_id, type, deleted_at),
+    CONSTRAINT fk_wallets_users FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
+    CONSTRAINT chk_wallet_balance_non_negative CHECK (balance >= 0),
+    CONSTRAINT chk_wallet_interest_rate CHECK (
+        interest_rate_percent IS NULL
+        OR interest_rate_percent >= 0
+    )
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
 
 -- 5. BẢNG BUDGETS
@@ -288,6 +263,7 @@ CREATE TABLE recurring_transactions (
 frequency ENUM( 'DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY' ) NOT NULL,
 
 -- Ngày thực hiện lặp (ví dụ: ngày 5 hàng tháng, hoặc thứ 2 hàng tuần)
+
 
 day_of_period INT NOT NULL, 
 

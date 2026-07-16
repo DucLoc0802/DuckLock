@@ -1,6 +1,7 @@
 import { pool } from "../../config/db";
 import { randomUUID } from "crypto";
 import { WalletEntity } from "./entities/wallet.entity";
+import { AppError } from "../../utils/app-errors";
 
 export const WalletsService = {
     getAllWallets: async (userId: string): Promise<WalletEntity[]> => {
@@ -26,6 +27,10 @@ export const WalletsService = {
         balance: number,
         interestRatePercent: number | null
     ): Promise<any> => {
+        const checkNameAndTypeQuery = `select name, type from wallets where user_id = ? and name = ? and type = ?`;
+        const [result] = await pool.query<any>(checkNameAndTypeQuery, [userId, name, type]);
+        if (result.length > 0) throw new AppError(409, "Tên ví đã tồn tại");
+
         const id = randomUUID();
         const query = `insert into wallets (id, user_id, name, type, balance, currency, interest_rate_percent, is_default, sort_order)
         values (?, ?, ?, ?, ?, 'VND', ?, false, 0)`;
@@ -40,6 +45,7 @@ export const WalletsService = {
             interest_rate_percent: interestRatePercent
         };
     },
+
     updateWallet: async (userId: string, id: string, type: string | 'BANK' | 'SAVING', name: string, balance: number): Promise<any> => {
         const query = `update wallets
         set name = ? 

@@ -2,38 +2,40 @@ import { pool } from "../../config/db";
 import { randomUUID } from "crypto";
 import { BudgetEntity } from "./entities/budget.entity";
 import { CreateBudgetDto } from "./dto/create-budget.dto";
+import { AppError } from "../../utils/app-errors";
 
 export const BudgetsService = {
     createBudgets: async (userId: string, dto: CreateBudgetDto): Promise<any> => {
-        const query1 = `select id from budgets where user_id = ? and name = ?`
-        const [check] = await pool.query<any[]>(query1, [userId, dto.name]);
+        const checkNameQuery = `select id from budgets where user_id = ? and name = ?`
+        const [check] = await pool.query<any[]>(checkNameQuery, [userId, dto.name]);
         if (check.length > 0) {
-            throw new Error("Ngân sách đã tồn tại");
+            throw new AppError(409, "Tên ngân sách đã tồn tại");
         }
-        const query2 = `insert into budgets (user_id, name, category_id, budget_month, amount, amount_in_default_currency, alert_threshold_percent)
+        const id = randomUUID();
+        const createBudgetQuery = `insert into budgets (id, user_id, name, category_id, budget_month, amount, amount_in_default_currency, alert_threshold_percent)
         values (?, ?, ?, ?, ?, ?, ?)`;
-        const result = await pool.query<any>(query2, [userId, dto.name, dto.categoryId, dto.budgetMonth, dto.amount, dto.amountInDefaultCurrency, dto.alertThresholdPercent]);
+        const result = await pool.query<any>(createBudgetQuery, [id, userId, dto.name, dto.categoryId, dto.budgetMonth, dto.amount, dto.amountInDefaultCurrency, dto.alertThresholdPercent]);
         return result;
     },
 
     listBudgets: async (userId: string): Promise<any[]> => {
-        const query = `select id, name, amount, currency, budget_month, amount_in_default_currency, alert_threshold_percent
+        const listBudgetQuery = `select id, name, amount, currency, budget_month, amount_in_default_currency, alert_threshold_percent
         from budgets where user_id = ? AND deleted_at IS NULL`
-        const [result] = await pool.query<any[]>(query, [userId]);
+        const [result] = await pool.query<any[]>(listBudgetQuery, [userId]);
         return result;
     },
 
     getBudgetById: async (userId: string, id: string): Promise<any> => {
-        const query = `select id, name, amount, currency, budget_month, amount_in_default_currency, alert_threshold_percent
+        const getBudgetQuery = `select id, name, amount, currency, budget_month, amount_in_default_currency, alert_threshold_percent
         from budgets where user_id = ? and id = ? AND deleted_at IS NULL`
-        const [result] = await pool.query<any[]>(query, [userId, id]);
+        const [result] = await pool.query<any[]>(getBudgetQuery, [userId, id]);
         if (result.length === 0)
-            throw new Error("Không tìm thấy ngân sách");
+            throw new AppError(404, "Không tìm thấy ngân sách");
         return result[0];
     },
 
     updateBudget: async (userId: string, id: string, dto: CreateBudgetDto): Promise<any> => {
-        const query = `update budgets
+        const updateBudgetQuery = `update budgets
         set name = ? 
         , amount = ? 
         , category_id = ? 
@@ -42,7 +44,7 @@ export const BudgetsService = {
         , is_active = ?
         where user_id = ?
         and id = ?`;
-        const [result] = await pool.query<any>(query, [dto.name, dto.amount, dto.categoryId, dto.amountInDefaultCurrency, dto.alertThresholdPercent, dto.isActive, userId, id]);
+        const [result] = await pool.query<any>(updateBudgetQuery, [dto.name, dto.amount, dto.categoryId, dto.amountInDefaultCurrency, dto.alertThresholdPercent, dto.isActive, userId, id]);
         if (result.affectedRows === 0)
             throw new Error("Không tìm thấy ngân sách");
         return {
@@ -58,11 +60,11 @@ export const BudgetsService = {
     },
 
     deleteBudget: async (userId: string, id: string): Promise<any> => {
-        const query = `update budgets
+        const deleteBudgetQuery = `update budgets
         set deleted_at = NOW()
         where user_id = ?
         and id = ?`;
-        const [result] = await pool.query<any>(query, [userId, id]);
+        const [result] = await pool.query<any>(deleteBudgetQuery, [userId, id]);
         if (result.affectedRows === 0)
             throw new Error("Không tìm thấy ngân sách");
         return {

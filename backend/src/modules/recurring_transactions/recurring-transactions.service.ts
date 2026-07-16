@@ -1,9 +1,20 @@
 import { pool } from "../../config/db";
+import { AppError } from "../../utils/app-errors";
 import { CreateRecurringTransactionDto } from "./dto/create-recurring-transaction.dto";
 import { UpdateRecurringTransactionDto } from "./dto/update-recurring-transaction.dto";
 
 export const RecurringTransactionsService = {
     createRecurringTransaction: async (userId: string, dto: CreateRecurringTransactionDto): Promise<any> => {
+        const checkWalletQuery = `select id from wallets where id = ? AND user_id = ? AND deleted_at IS NULL`
+        const [checkWallet] = await pool.query<any[]>(checkWalletQuery, [dto.walletId, userId]);
+        if (checkWallet.length === 0)
+            throw new AppError(404, "Không tìm thấy ví");
+
+        const checkNameAndTypeQuery = `select id from recurring_transactions where user_id = ? AND name = ? AND type = ? AND deleted_at IS NULL`;
+        const [checkNameAndType] = await pool.query<any[]>(checkNameAndTypeQuery, [userId, dto.name, dto.type]);
+        if (checkNameAndType.length > 0)
+            throw new AppError(409, "Giao dịch định kỳ đã tồn tại");
+
         const query = `INSERT INTO recurring_transactions 
             (user_id, wallet_id, category_id, name, amount, type, description, frequency, day_of_period, start_date, end_date, next_execution_date)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
