@@ -11,9 +11,10 @@ import { PrimaryButton } from '@/components/ui/PrimaryButton';
 import { SecondaryButton } from '@/components/ui/SecondaryButton';
 import { useAppStore } from '@/src/store/app-store';
 import { colors, radius, spacing } from '@/src/theme/tokens';
+import { formatCurrencyInput, parseCurrencyInput } from '@/src/utils/format';
 
 export function AddTransactionScreen() {
-  const { categories, addTransaction, isOffline, syncCategory, wallets } = useAppStore();
+  const { categories, addTransaction, isOffline, syncCategory, wallets, showToast } = useAppStore();
   const { imageUri } = useLocalSearchParams<{ imageUri?: string }>();
   
   const expenseCategories = useMemo(
@@ -22,6 +23,10 @@ export function AddTransactionScreen() {
   );
   const [amount, setAmount] = useState('');
   const [type, setType] = useState<'expense' | 'income'>('expense');
+  const availableCategories = useMemo(
+    () => (type === 'income' ? categories.filter((item) => item.id === 'salary') : expenseCategories),
+    [categories, expenseCategories, type],
+  );
   const [categoryId, setCategoryId] = useState(expenseCategories[0]?.id ?? '');
   const [transactionDate, setTransactionDate] = useState(new Date().toISOString().slice(0, 10));
   const [note, setNote] = useState('');
@@ -37,13 +42,17 @@ export function AddTransactionScreen() {
     }
   }, [wallets, selectedWalletId]);
 
+  useEffect(() => {
+    setCategoryId(availableCategories[0]?.id ?? '');
+  }, [availableCategories, type]);
+
   // Thêm state cho việc tạo danh mục mới
   const [newCategoryName, setNewCategoryName] = useState('');
   const [showNewCategoryInput, setShowNewCategoryInput] = useState(false);
 
   function handleSaveNewCategory() {
     if (!newCategoryName.trim()) {
-      Alert.alert('Chưa hợp lệ', 'Vui lòng nhập tên danh mục mới');
+      showToast('Vui lòng nhập tên danh mục mới', 'error');
       return;
     }
     const name = newCategoryName.trim();
@@ -61,20 +70,21 @@ export function AddTransactionScreen() {
   }
 
   async function onSave() {
-    if (!amount || Number(amount) <= 0 || !categoryId) {
-      Alert.alert('Chưa hợp lệ', 'Hãy nhập số tiền và chọn danh mục');
+    const parsedAmount = parseCurrencyInput(amount);
+    if (!amount || parsedAmount <= 0 || !categoryId) {
+      showToast('Hãy nhập số tiền và chọn danh mục', 'error');
       return;
     }
 
     if (!selectedWalletId) {
-      Alert.alert('Chưa hợp lệ', 'Vui lòng chọn tài khoản hoặc ví thanh toán');
+      showToast('Vui lòng chọn tài khoản hoặc ví thanh toán', 'error');
       return;
     }
 
     try {
       setLoading(true);
       await addTransaction({
-        amount: Number(amount),
+        amount: parsedAmount,
         categoryId,
         type,
         note,
@@ -82,8 +92,10 @@ export function AddTransactionScreen() {
         walletId: selectedWalletId,
         imageUri, // Truyền đường dẫn ảnh vừa chụp xuống store
       });
-      Alert.alert('Thành công', isOffline ? 'Đã lưu và chờ đồng bộ' : 'Đã lưu giao dịch');
+      showToast(isOffline ? 'Đã lưu và chờ đồng bộ' : 'Đã lưu giao dịch thành công!', 'success');
       router.back();
+    } catch (error: any) {
+      showToast(error.message || 'Lưu giao dịch thất bại', 'error');
     } finally {
       setLoading(false);
     }
@@ -125,7 +137,7 @@ export function AddTransactionScreen() {
           <TextInput
             keyboardType="numeric"
             value={amount}
-            onChangeText={setAmount}
+            onChangeText={(value) => setAmount(formatCurrencyInput(value))}
             placeholder="0"
             style={[inputStyle, { fontSize: 28, fontWeight: '800' }]}
           />
@@ -189,7 +201,7 @@ export function AddTransactionScreen() {
         <View>
           <Text style={labelStyle}>Danh mục</Text>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
-            {(type === 'income' ? categories.filter((item) => item.id === 'salary') : expenseCategories).map(
+            {availableCategories.map(
               (item) => (
                 <Pressable
                   key={item.id}

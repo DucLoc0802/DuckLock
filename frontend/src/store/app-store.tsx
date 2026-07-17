@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 
 import { authService } from '@/src/services/authService';
 import { categoryService } from '@/src/services/categoryService';
@@ -16,6 +16,7 @@ import {
   Wallet,
 } from '@/src/types/piggy';
 import { walletService } from '@/src/services/walletService';
+import { Toast } from '@/components/ui/Toast';
 
 interface AppStoreValue {
   authState: AsyncState;
@@ -29,6 +30,7 @@ interface AppStoreValue {
   isOffline: boolean;
   wallets: Wallet[];
   loadWallets: () => Promise<void>;
+  refreshData: () => Promise<void>;
   login: (email: string, password: string) => Promise<void>;
   register: (name: string, email: string, password: string) => Promise<void>;
   logout: () => void;
@@ -38,6 +40,7 @@ interface AppStoreValue {
   uploadProofImage: (imageUri: string) => Promise<void>;
   toggleOffline: () => void;
   syncCategory: (category: Category) => void;
+  showToast: (message: string, type?: 'success' | 'error' | 'info') => void;
 }
 
 const AppStoreContext = createContext<AppStoreValue | null>(null);
@@ -60,6 +63,21 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
     setWallets(data);
   }
 
+  async function refreshData() {
+    if (!token) return;
+    const [nextWallets, nextReport, nextWeeklyReport] = await Promise.all([
+      walletService.listWallets(token),
+      reportService.getMonthlySummary(token),
+      reportService.getWeeklySummary(token),
+    ]);
+
+    setWallets(nextWallets);
+    if (nextReport) setReport(nextReport);
+    if (nextWeeklyReport?.dailySeries) {
+      setWeeklyReport(nextWeeklyReport.dailySeries);
+    }
+  }
+
   // 1. Tự động tải lại dữ liệu khi Token thay đổi (Người dùng đã Đăng nhập thành công)
   useEffect(() => {
     // Tải danh mục giả lập (Frontend Mock)
@@ -73,14 +91,24 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
         
         // Trích xuất các danh mục động từ giao dịch trả về từ Backend
         // để bổ sung vào categories state nếu chưa tồn tại
+        const dynamicCategories: any[] = [];
         txs.forEach((tx: any) => {
           if (tx.rawCategory) {
-            setCategories((prev) => {
-              if (prev.some((c) => c.id === tx.rawCategory.id)) return prev;
-              return [...prev, tx.rawCategory];
-            });
+            dynamicCategories.push(tx.rawCategory);
           }
         });
+
+        if (dynamicCategories.length > 0) {
+          setCategories((prev) => {
+            const nextCategories = [...prev];
+            dynamicCategories.forEach((cat) => {
+              if (!nextCategories.some((c) => c.id === cat.id)) {
+                nextCategories.push(cat);
+              }
+            });
+            return nextCategories;
+          });
+        }
       });
       // Lấy danh sách ảnh hóa đơn đang chờ xử lý từ Backend
       proofImageService.listPending(token).then(setProofImages);
@@ -148,20 +176,20 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
     // Truyền thêm biến token và categoryName để lưu vào DB MySQL
     const created = await transactionService.createTransaction(input, token, isOffline, categoryName);
     setTransactions((current) => [created, ...current]);
-    loadWallets(); // Cập nhật lại số dư ví
+    await refreshData();
   }
 
   async function updateTransaction(id: string, input: CreateTransactionInput) {
     const categoryName = categories.find((c) => c.id === input.categoryId)?.name || 'Khác';
     const updated = await transactionService.updateTransaction(id, input, token, categoryName);
     setTransactions((current) => current.map((t) => (t.id === id ? updated : t)));
-    loadWallets(); // Cập nhật lại số dư ví
+    await refreshData();
   }
 
   async function deleteTransaction(id: string) {
     await transactionService.deleteTransaction(id, token);
     setTransactions((current) => current.filter((tx) => tx.id !== id));
-    loadWallets(); // Cập nhật lại số dư ví
+    await refreshData();
   }
 
   async function uploadProofImage(imageUri: string) {
@@ -175,6 +203,12 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
       return [...prev, category];
     });
   }
+
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
+
+  const showToast = useCallback((message: string, type: 'success' | 'error' | 'info' = 'info') => {
+    setToast({ message, type });
+  }, []);
 
   function toggleOffline() {
     setIsOffline((current) => !current);
@@ -194,6 +228,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
         isOffline,
         wallets,
         loadWallets,
+        refreshData,
         login,
         register,
         logout,
@@ -203,8 +238,16 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
         uploadProofImage,
         toggleOffline,
         syncCategory,
+        showToast,
       }}>
       {children}
+      {toast ? (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onDismiss={() => setToast(null)}
+        />
+      ) : null}
     </AppStoreContext.Provider>
   );
 }

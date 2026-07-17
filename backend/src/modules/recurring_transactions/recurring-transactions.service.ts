@@ -58,7 +58,7 @@ export const RecurringTransactionsService = {
             WHERE user_id = ? AND id = ? AND deleted_at IS NULL`;
         const [result] = await pool.query<any[]>(query, [userId, id]);
         if (result.length === 0)
-            throw new Error("Không tìm thấy giao dịch định kỳ");
+            throw new AppError(404, "Không tìm thấy giao dịch định kỳ");
         return result[0];
     },
 
@@ -94,7 +94,7 @@ export const RecurringTransactionsService = {
             id,
         ]);
         if (result.affectedRows === 0)
-            throw new Error("Không tìm thấy giao dịch định kỳ");
+            throw new AppError(404, "Không tìm thấy giao dịch định kỳ");
         return { id, userId, ...dto };
     },
 
@@ -104,7 +104,7 @@ export const RecurringTransactionsService = {
             WHERE user_id = ? AND id = ? AND deleted_at IS NULL`;
         const [result] = await pool.query<any>(query, [userId, id]);
         if (result.affectedRows === 0)
-            throw new Error("Không tìm thấy giao dịch định kỳ");
+            throw new AppError(404, "Không tìm thấy giao dịch định kỳ");
         return {
             success: true,
             message: "Xóa giao dịch định kỳ thành công",

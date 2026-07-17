@@ -3,6 +3,7 @@ import { Href, router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   ScrollView,
   StyleSheet,
   Text,
@@ -14,7 +15,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { AppScreen } from '@/components/ui/AppScreen';
 import { useAppStore } from '@/src/store/app-store';
 import { walletService } from '@/src/services/walletService';
-import { Wallet, WalletType } from '@/src/types/piggy';
+import { Wallet, WalletInterest, WalletType } from '@/src/types/piggy';
 import { colors, radius, shadows, spacing } from '@/src/theme/tokens';
 import { formatCompactCurrency } from '@/src/utils/format';
 
@@ -47,12 +48,13 @@ const TYPE_META: Record<WalletType, { title: string; icon: keyof typeof Ionicons
 
 export default function WalletCategoryScreen() {
   const { type } = useLocalSearchParams<{ type: string }>();
-  const { token } = useAppStore();
+  const { token, refreshData, showToast } = useAppStore();
 
   const walletType = (type as WalletType) || 'BANK';
   const meta = TYPE_META[walletType] || TYPE_META.OTHER;
 
   const [wallets, setWallets] = useState<Wallet[]>([]);
+  const [interestDetails, setInterestDetails] = useState<WalletInterest[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -62,6 +64,9 @@ export default function WalletCategoryScreen() {
         const allWallets = await walletService.listWallets(token);
         const filtered = allWallets.filter((w) => w.type === walletType);
         setWallets(filtered);
+        if (walletType === 'SAVING') {
+          setInterestDetails(await walletService.calculateInterest(token));
+        }
       } catch (error) {
         console.error('Lỗi khi tải danh sách ví:', error);
       } finally {
@@ -72,6 +77,19 @@ export default function WalletCategoryScreen() {
   }, [token, walletType]);
 
   const totalBalance = wallets.reduce((sum, w) => sum + w.balance, 0);
+
+  async function collectInterest(walletId: string, period: 'MONTHLY' | 'YEARLY') {
+    try {
+      const result = await walletService.collectInterest(walletId, period, token);
+      showToast(result?.message || 'Đã nhận lãi tiết kiệm', 'success');
+      const allWallets = await walletService.listWallets(token);
+      setWallets(allWallets.filter((w) => w.type === walletType));
+      setInterestDetails(await walletService.calculateInterest(token));
+      await refreshData();
+    } catch (error: any) {
+      showToast(error.message || 'Không thể nhận lãi', 'error');
+    }
+  }
 
   if (loading) {
     return (
@@ -103,6 +121,34 @@ export default function WalletCategoryScreen() {
           <Text style={styles.totalAmount}>{formatCompactCurrency(totalBalance)}</Text>
           <Text style={styles.walletCount}>{wallets.length} tài khoản</Text>
         </LinearGradient>
+
+        {walletType === 'SAVING' && interestDetails.length > 0 ? (
+          <View style={styles.interestPanel}>
+            <Text style={styles.interestTitle}>Lãi tiết kiệm dự kiến</Text>
+            {interestDetails.map((item) => (
+              <View key={item.walletId} style={styles.interestRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.walletName}>{item.walletName}</Text>
+                  <Text style={styles.interestRate}>
+                    Mỗi ngày: {formatCompactCurrency(Math.round(item.dailyInterest))}
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  onPress={() => collectInterest(item.walletId, 'MONTHLY')}
+                  style={styles.collectButton}
+                >
+                  <Text style={styles.collectButtonText}>Tháng</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => collectInterest(item.walletId, 'YEARLY')}
+                  style={styles.collectButton}
+                >
+                  <Text style={styles.collectButtonText}>Năm</Text>
+                </TouchableOpacity>
+              </View>
+            ))}
+          </View>
+        ) : null}
 
         <View style={styles.listContainer}>
           {wallets.length === 0 ? (
@@ -295,5 +341,36 @@ const styles = StyleSheet.create({
   addButtonText: {
     fontSize: 15,
     fontWeight: '700',
+  },
+  interestPanel: {
+    gap: spacing.md,
+    padding: spacing.lg,
+    borderRadius: radius.xl,
+    backgroundColor: colors.accentYellowSoft,
+    borderWidth: 1,
+    borderColor: colors.accentYellow,
+  },
+  interestTitle: {
+    fontSize: 16,
+    fontWeight: '900',
+    color: colors.textPrimary,
+  },
+  interestRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  collectButton: {
+    paddingHorizontal: spacing.md,
+    height: 36,
+    borderRadius: radius.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.primaryDark,
+  },
+  collectButtonText: {
+    color: colors.white,
+    fontSize: 13,
+    fontWeight: '800',
   },
 });

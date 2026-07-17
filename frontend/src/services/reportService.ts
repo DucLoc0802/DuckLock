@@ -1,5 +1,18 @@
 import { API_BASE_URL } from '@/src/config/api';
 import { ReportSummary } from '@/src/types/piggy';
+import { formatCompactCurrency } from '@/src/utils/format';
+
+function formatCompareText(raw: string): string {
+  if (!raw) return 'Đang cập nhật';
+  // Backend returns "Tăng 50000" or "Giảm 20000"
+  const match = raw.match(/(Tăng|Giảm)\s+(\d+)/);
+  if (match) {
+    const direction = match[1];
+    const amount = Number(match[2]);
+    return `${direction} ${formatCompactCurrency(amount)} so với tháng trước`;
+  }
+  return raw;
+}
 
 export const reportService = {
   async getMonthlySummary(token: string | null): Promise<ReportSummary | null> {
@@ -23,7 +36,7 @@ export const reportService = {
         monthLabel: result.data.monthLabel,
         totalExpense: Number(result.data.totalExpense) || 0,
         totalIncome: Number(result.data.totalIncome) || 0,
-        compareText: result.data.compareText,
+        compareText: formatCompareText(result.data.compareText),
         dailySeries: result.data.dailySeries || [],
         categoryBreakdown: (result.data.categoryBreakdown || []).map((item: any) => ({
           categoryId: item.categoryId,

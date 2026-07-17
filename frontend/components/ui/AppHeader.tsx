@@ -9,9 +9,10 @@ interface AppHeaderProps {
   subtitle?: string;
   back?: boolean;
   rightSlot?: React.ReactNode;
+  onMenuPress?: () => void;
 }
 
-export function AppHeader({ title, subtitle, back, rightSlot }: AppHeaderProps) {
+export function AppHeader({ title, subtitle, back, rightSlot, onMenuPress }: AppHeaderProps) {
   return (
     <View
       style={{
@@ -34,6 +35,19 @@ export function AppHeader({ title, subtitle, back, rightSlot }: AppHeaderProps) 
               justifyContent: 'center',
             }}>
             <Ionicons name="chevron-back" size={20} color={colors.textPrimary} />
+          </Pressable>
+        ) : onMenuPress ? (
+          <Pressable
+            onPress={onMenuPress}
+            style={{
+              width: 42,
+              height: 42,
+              borderRadius: 16,
+              backgroundColor: colors.surface,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}>
+            <Ionicons name="menu" size={22} color={colors.textPrimary} />
           </Pressable>
         ) : null}
         <View style={{ flex: 1 }}>

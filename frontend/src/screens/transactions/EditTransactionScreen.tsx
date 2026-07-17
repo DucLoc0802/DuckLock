@@ -1,12 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -22,18 +21,24 @@ import { SecondaryButton } from '@/components/ui/SecondaryButton';
 import { useAppStore } from '@/src/store/app-store';
 import { colors, radius, spacing } from '@/src/theme/tokens';
 import { transactionService } from '@/src/services/transactionService';
+import { formatCurrencyInput, parseCurrencyInput } from '@/src/utils/format';
 
 export function EditTransactionScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { categories, updateTransaction, token, isOffline, syncCategory, wallets } = useAppStore();
+  const { categories, updateTransaction, token, isOffline, syncCategory, wallets, showToast } = useAppStore();
 
   const expenseCategories = useMemo(
     () => categories.filter((item) => item.id !== 'salary'),
     [categories],
   );
+  const skipCategoryReset = useRef(true);
 
   const [amount, setAmount] = useState('');
   const [type, setType] = useState<'expense' | 'income'>('expense');
+  const availableCategories = useMemo(
+    () => (type === 'income' ? categories.filter((item) => item.id === 'salary') : expenseCategories),
+    [categories, expenseCategories, type],
+  );
   const [categoryId, setCategoryId] = useState('');
   const [transactionDate, setTransactionDate] = useState('');
   const [note, setNote] = useState('');
@@ -54,7 +59,8 @@ export function EditTransactionScreen() {
         setFetching(true);
         const data = await transactionService.getTransactionDetail(id, token);
         if (data) {
-          setAmount(String(data.amount));
+          skipCategoryReset.current = true;
+          setAmount(formatCurrencyInput(data.amount));
           setType(data.type);
           setCategoryId(data.categoryId);
           setTransactionDate(data.transactionDate ? data.transactionDate.slice(0, 10) : new Date().toISOString().slice(0, 10));
@@ -67,7 +73,7 @@ export function EditTransactionScreen() {
         }
       } catch (error) {
         console.error('Lỗi khi tải chi tiết giao dịch:', error);
-        Alert.alert('Lỗi', 'Không thể lấy thông tin giao dịch cần sửa');
+        showToast('Không thể lấy thông tin giao dịch cần sửa', 'error');
         router.back();
       } finally {
         setFetching(false);
@@ -76,9 +82,18 @@ export function EditTransactionScreen() {
     loadDetail();
   }, [id, token]);
 
+  useEffect(() => {
+    if (fetching) return;
+    if (skipCategoryReset.current) {
+      skipCategoryReset.current = false;
+      return;
+    }
+    setCategoryId(availableCategories[0]?.id ?? '');
+  }, [availableCategories, fetching, type]);
+
   function handleSaveNewCategory() {
     if (!newCategoryName.trim()) {
-      Alert.alert('Chưa hợp lệ', 'Vui lòng nhập tên danh mục mới');
+      showToast('Vui lòng nhập tên danh mục mới', 'error');
       return;
     }
     const name = newCategoryName.trim();
@@ -96,15 +111,21 @@ export function EditTransactionScreen() {
   }
 
   async function onSave() {
+      const parsedAmount = parseCurrencyInput(amount);
+      if (!amount || parsedAmount <= 0 || !categoryId) {
+        showToast('Hãy nhập số tiền và chọn danh mục', 'error');
+        return;
+      }
+
       if (!selectedWalletId) {
-        Alert.alert('Chưa hợp lệ', 'Vui lòng chọn tài khoản hoặc ví thanh toán');
+        showToast('Vui lòng chọn tài khoản hoặc ví thanh toán', 'error');
         return;
       }
 
       try {
         setLoading(true);
         await updateTransaction(id, {
-          amount: Number(amount),
+          amount: parsedAmount,
           categoryId,
           type,
           note,
@@ -112,13 +133,13 @@ export function EditTransactionScreen() {
           walletId: selectedWalletId,
           imageUri,
         });
-        Alert.alert('Thành công', 'Đã cập nhật giao dịch thành công.');
-      router.back();
-    } catch (error: any) {
-      Alert.alert('Thất bại', error.message || 'Không thể cập nhật giao dịch');
-    } finally {
-      setLoading(false);
-    }
+        showToast('Đã cập nhật giao dịch thành công.', 'success');
+        router.back();
+      } catch (error: any) {
+        showToast(error.message || 'Không thể cập nhật giao dịch', 'error');
+      } finally {
+        setLoading(false);
+      }
   }
 
   if (fetching) {
@@ -165,7 +186,7 @@ export function EditTransactionScreen() {
           <TextInput
             keyboardType="numeric"
             value={amount}
-            onChangeText={setAmount}
+            onChangeText={(value) => setAmount(formatCurrencyInput(value))}
             placeholder="0"
             style={[inputStyle, { fontSize: 28, fontWeight: '800' }]}
           />
@@ -229,7 +250,7 @@ export function EditTransactionScreen() {
         <View>
           <Text style={labelStyle}>Danh mục</Text>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
-            {(type === 'income' ? categories.filter((item) => item.id === 'salary') : expenseCategories).map(
+            {availableCategories.map(
               (item) => (
                 <Pressable
                   key={item.id}

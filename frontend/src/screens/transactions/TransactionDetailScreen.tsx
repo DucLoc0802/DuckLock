@@ -21,7 +21,7 @@ import { transactionService } from '@/src/services/transactionService';
 
 export function TransactionDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { token, categories, deleteTransaction, syncCategory } = useAppStore();
+  const { token, categories, deleteTransaction, syncCategory, showToast } = useAppStore();
 
   const [loading, setLoading] = useState(true);
   const [detail, setDetail] = useState<any>(null);
@@ -42,7 +42,7 @@ export function TransactionDetailScreen() {
         }
       } catch (error) {
         console.error('Lỗi khi tải chi tiết giao dịch:', error);
-        Alert.alert('Lỗi', 'Không thể kết nối lấy chi tiết giao dịch.');
+        showToast('Không thể kết nối lấy chi tiết giao dịch.', 'error');
       } finally {
         setLoading(false);
       }
@@ -64,11 +64,11 @@ export function TransactionDetailScreen() {
               setDeleting(true);
               if (id) {
                 await deleteTransaction(id);
-                Alert.alert('Thành công', 'Đã xóa giao dịch thành công.');
+                showToast('Đã xóa giao dịch thành công.', 'success');
                 router.back();
               }
             } catch (error: any) {
-              Alert.alert('Thất bại', error.message || 'Không thể xóa giao dịch');
+              showToast(error.message || 'Không thể xóa giao dịch', 'error');
             } finally {
               setDeleting(false);
             }

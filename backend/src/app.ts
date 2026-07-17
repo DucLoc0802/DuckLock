@@ -6,6 +6,7 @@ import { WalletModule } from "./modules/wallets/wallets.module";
 import { ReportsModule } from "./modules/reports/reports.module";
 import { BudgetModule } from "./modules/budgets/budgets.module";
 import { RecurringTransactionModule } from "./modules/recurring_transactions/recurring-transactions.module";
+import { AppError } from "./utils/app-errors";
 
 const app = express();
 
@@ -37,13 +38,19 @@ app.use((req, res) =>
   res.status(404).json({ message: `Route ${req.originalUrl} not found` })
 );
 
-export default app;
-
 // Middleware xử lý lỗi tập trung (Đặt dưới cùng các Route)
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
   console.error("🔥 System Error Log:", err); // Log lỗi ra console để debug
 
-  // 1. Phân loại và xử lý tập trung lỗi của MySQL
+  // 1. Lỗi nghiệp vụ tự định nghĩa (AppError) → Đọc đúng statusCode
+  if (err instanceof AppError) {
+    return res.status(err.statusCode).json({
+      success: false,
+      message: err.message
+    });
+  }
+
+  // 2. Lỗi ràng buộc MySQL (có err.errno)
   if (err.errno) {
     let message = "Đã xảy ra lỗi cơ sở dữ liệu!";
     let statusCode = 400;
@@ -73,10 +80,12 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
     });
   }
 
-  // 2. Xử lý các lỗi nghiệp vụ tự định nghĩa (Business logic error)
+  // 3. Lỗi hệ thống thật sự (bug, crash bất ngờ) → Luôn trả về 500
   return res.status(500).json({
     success: false,
-    message: err.message || "Đã xảy ra lỗi hệ thống!"
+    message: "Đã xảy ra lỗi hệ thống!"
   });
-
 });
+
+export default app;
+

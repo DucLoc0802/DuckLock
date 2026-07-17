@@ -32,6 +32,8 @@ export default function RootLayout() {
           <Stack.Screen name="(tabs)" />
           <Stack.Screen name="add-transaction" options={{ presentation: 'modal' }} />
           <Stack.Screen name="transaction/[id]" options={{ presentation: 'card' }} />
+          <Stack.Screen name="budget" options={{ presentation: 'card' }} />
+          <Stack.Screen name="recurring" options={{ presentation: 'card' }} />
         </Stack>
         <StatusBar style="dark" />
       </ThemeProvider>

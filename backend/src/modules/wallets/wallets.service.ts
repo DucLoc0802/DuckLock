@@ -5,18 +5,18 @@ import { AppError } from "../../utils/app-errors";
 
 export const WalletsService = {
     getAllWallets: async (userId: string): Promise<WalletEntity[]> => {
-        const query = `select id, name, type, balance, currency, interest_rate_percent
+        const query = `select id, name, type, balance, currency, interest_rate_percent, created_at
         from wallets where user_id = ? AND deleted_at IS NULL`
         const [result] = await pool.query<any[]>(query, [userId]);
         return result;
     },
 
     getWalletById: async (userId: string, id: string): Promise<any> => {
-        const query = `select id, name, type, balance, currency, interest_rate_percent
+        const query = `select id, name, type, balance, currency, interest_rate_percent, created_at
         from wallets where user_id = ? and id = ? AND deleted_at IS NULL`
         const [result] = await pool.query<any[]>(query, [userId, id]);
         if (result.length === 0)
-            throw new Error("Không tìm thấy ví");
+            throw new AppError(404, "Không tìm thấy ví");
         return result[0];
     },
 
@@ -42,25 +42,28 @@ export const WalletsService = {
             type,
             balance,
             currency: 'VND',
-            interest_rate_percent: interestRatePercent
+            interest_rate_percent: interestRatePercent,
+            created_at: new Date()
         };
     },
 
-    updateWallet: async (userId: string, id: string, type: string | 'BANK' | 'SAVING', name: string, balance: number): Promise<any> => {
+    updateWallet: async (userId: string, id: string, type: string | 'BANK' | 'SAVING', name: string, balance: number, interestRatePercent: number | null): Promise<any> => {
         const query = `update wallets
         set name = ? 
         , balance = ?
+        , interest_rate_percent = ?
         where user_id = ?
         and id = ?
         and type = ?`;
-        const [result] = await pool.query<any>(query, [name, balance, userId, id, type]);
+        const [result] = await pool.query<any>(query, [name, balance, interestRatePercent, userId, id, type]);
         if (result.affectedRows === 0)
-            throw new Error("Không tìm thấy ví");
+            throw new AppError(404, "Không tìm thấy ví");
         return {
             id,
             userId,
             name,
-            balance
+            balance,
+            interest_rate_percent: interestRatePercent
         }
     },
     deleteWallet: async (userId: string, id: string): Promise<any> => {
@@ -70,10 +73,10 @@ export const WalletsService = {
         and id = ?`;
         const [result] = await pool.query<any>(query, [userId, id]);
         if (result.affectedRows === 0)
-            throw new Error("Không tìm thấy ví");
+            throw new AppError(404, "Không tìm thấy ví");
         return {
             success: true,
-            message: "Xóa giao dịch thành công"
+            message: "Xóa ví thành công"
         };
     },
     calculateInterest: async (userId: string): Promise<any[]> => {
@@ -106,11 +109,11 @@ export const WalletsService = {
         // 1. Lấy thông tin ví tiết kiệm
         const query1 = `SELECT * FROM wallets WHERE id = ? AND user_id = ? AND type = 'SAVING' AND deleted_at IS NULL`;
         const [wallets] = await pool.query<any[]>(query1, [walletId, userId]);
-        if (wallets.length === 0) throw new Error("Không tìm thấy ví tiết kiệm");
+        if (wallets.length === 0) throw new AppError(404, "Không tìm thấy ví tiết kiệm");
         const wallet = wallets[0];
 
         if (!wallet.interest_rate_percent || wallet.interest_rate_percent <= 0) {
-            throw new Error("Ví này không có lãi suất");
+            throw new AppError(400, "Ví này không có lãi suất");
         }
 
         // 2. Tính tiền lãi dựa theo chu kỳ
@@ -128,7 +131,7 @@ export const WalletsService = {
 
         // 4. Tạo giao dịch INCOME loại "Tiền lãi tiết kiệm"
         const query3 = `INSERT INTO transactions (user_id, wallet_id, amount, type, description, transaction_date, amount_in_default_currency)
-         VALUES (?, ?, ?, 'INCOME', ?, NOW(), ?)`;
+         VALUES (?, ?, ?, 'INCOME', ?, CURDATE(), ?)`;
         await pool.query(query3, [userId, walletId, interest, `Tiền lãi tiết kiệm ${period === 'MONTHLY' ? 'tháng' : 'năm'} - ${wallet.name}`, interest]);
 
         return {

@@ -1,6 +1,7 @@
 import { pool } from "../../config/db";
 import { randomUUID } from "crypto";
 import { GetReportQueryDto } from "./dto/get-report-query.dto";
+import { AppError } from "../../utils/app-errors";
 
 export const ReportsService = {
     getMonthlySummary: async (userId: string, queryDto: GetReportQueryDto): Promise<any> => {
@@ -29,7 +30,7 @@ export const ReportsService = {
         AND year(transaction_date) = ? 
         AND type = 'EXPENSE'`
         const [totalExpenseValue] = await pool.query<any[]>(query1, [userId, targetMonth, targetYear]);
-        const totalExpense = totalExpenseValue[0].total_expense || 0;
+        const totalExpense = Number(totalExpenseValue[0].total_expense) || 0;
 
         //2. Lấy tổng thu nhập của tháng hiện tại
         const query2 = `select sum(amount) as total_income 
@@ -40,7 +41,7 @@ export const ReportsService = {
         AND year(transaction_date) = ? 
         AND type = 'INCOME'`
         const [totalIncomeValue] = await pool.query<any[]>(query2, [userId, targetMonth, targetYear]);
-        const totalIncome = totalIncomeValue[0].total_income || 0;
+        const totalIncome = Number(totalIncomeValue[0].total_income) || 0;
 
         //3. Lấy tổng chi tiêu của tháng trước tháng hiện tại
         const query3 = `select sum(amount) as previous_month_expense 
@@ -51,7 +52,7 @@ export const ReportsService = {
         AND year(transaction_date) = ? 
         AND type = 'EXPENSE'`
         const [previousMonthExpenseValue] = await pool.query<any[]>(query3, [userId, prevMonth, prevYear]);
-        const previousMonthExpense = previousMonthExpenseValue[0].previous_month_expense || 0;
+        const previousMonthExpense = Number(previousMonthExpenseValue[0].previous_month_expense) || 0;
 
         //4. Lấy tổng thu nhập của tháng trước tháng hiện tại
         const query4 = `select sum(amount) as previous_month_income 
@@ -62,7 +63,7 @@ export const ReportsService = {
         AND year(transaction_date) = ? 
         AND type = 'INCOME'`
         const [previousMonthIncomeValue] = await pool.query<any[]>(query4, [userId, prevMonth, prevYear]);
-        const previousMonthIncome = previousMonthIncomeValue[0].previous_month_income || 0;
+        const previousMonthIncome = Number(previousMonthIncomeValue[0].previous_month_income) || 0;
 
 
         // Lấy danh mục chi tiêu
@@ -100,7 +101,10 @@ export const ReportsService = {
 
     getWeeklySummary: async (userId: string, queryDto: GetReportQueryDto): Promise<any> => {
         // 5. Tính ngày bắt đầu (Thứ 2) và ngày kết thúc (Chủ Nhật) của tuần hiện tại
-        const today = new Date();
+        const today = queryDto.day ? new Date(queryDto.day) : new Date();
+        if (isNaN(today.getTime())) {
+            throw new AppError(400, "Ngày không hợp lệ");
+        }
         const currentDay = today.getDay(); // 0 là Chủ nhật, 1 là Thứ 2, ..., 6 là Thứ 7
         const distanceToMonday = currentDay === 0 ? -6 : 1 - currentDay; // Tính khoảng cách từ ngày hiện tại đến Thứ 2
 
@@ -149,7 +153,8 @@ export const ReportsService = {
         where user_id = ? 
         AND deleted_at IS NULL 
         AND day(transaction_date) = ? 
-        AND month(transaction_date) = ? 
+        AND month(transaction_date) = ?
+        AND year(transaction_date) = ? 
         AND type = 'EXPENSE'`
         const [result] = await pool.query<any[]>(query, [userId, targetDay, targetMonth]);
         return result;

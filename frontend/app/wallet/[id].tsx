@@ -12,16 +12,16 @@ import {
   View,
 } from 'react-native';
 
-import { AppHeader } from '@/components/ui/AppHeader';
 import { AppScreen } from '@/components/ui/AppScreen';
 import { useAppStore } from '@/src/store/app-store';
 import { walletService } from '@/src/services/walletService';
 import { colors, radius, spacing } from '@/src/theme/tokens';
 import { WalletType } from '@/src/types/piggy';
+import { formatCurrencyInput, parseCurrencyInput } from '@/src/utils/format';
 
 export default function WalletDetailScreen() {
   const { id, type } = useLocalSearchParams<{ id: string; type?: string }>();
-  const { token } = useAppStore();
+  const { token, loadWallets, showToast } = useAppStore();
 
   const isNew = id === 'new';
   const walletType = (type as WalletType) || 'BANK';
@@ -29,6 +29,7 @@ export default function WalletDetailScreen() {
   const [name, setName] = useState('');
   const [balance, setBalance] = useState('');
   const [interestRate, setInterestRate] = useState('');
+  const [currentWalletType, setCurrentWalletType] = useState<WalletType>(walletType);
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(false);
 
@@ -42,8 +43,9 @@ export default function WalletDetailScreen() {
         const wallet = allWallets.find((w) => w.id === id);
         if (wallet) {
           setName(wallet.name);
-          setBalance(String(wallet.balance));
+          setBalance(formatCurrencyInput(wallet.balance));
           setInterestRate(wallet.interest_rate_percent ? String(wallet.interest_rate_percent) : '');
+          setCurrentWalletType(wallet.type);
         }
       } catch (error) {
         console.error('Lỗi khi tải thông tin ví:', error);
@@ -56,7 +58,7 @@ export default function WalletDetailScreen() {
 
   async function handleSave() {
     if (!name.trim() || !balance.trim()) {
-      Alert.alert('Chưa hợp lệ', 'Vui lòng điền tên ví và số dư ban đầu');
+      showToast('Vui lòng điền tên ví và số dư ban đầu', 'error');
       return;
     }
 
@@ -67,27 +69,44 @@ export default function WalletDetailScreen() {
           {
             name: name.trim(),
             type: walletType,
-            balance: Number(balance) || 0,
-            interestRatePercent: walletType === 'SAVING' ? Number(interestRate) || 0 : null,
+            balance: parseCurrencyInput(balance),
+            interestRatePercent: currentWalletType === 'SAVING' ? Number(interestRate) || 0 : null,
           },
           token
         );
-        Alert.alert('Thành công', 'Đã tạo tài khoản/ví mới thành công.');
+        showToast('Đã tạo tài khoản/ví mới thành công.', 'success');
       } else {
         await walletService.updateWallet(
           id!,
           {
             name: name.trim(),
-            balance: Number(balance) || 0,
-            interestRatePercent: walletType === 'SAVING' ? Number(interestRate) || 0 : null,
+            balance: parseCurrencyInput(balance),
+            type: currentWalletType,
+            interestRatePercent: currentWalletType === 'SAVING' ? Number(interestRate) || 0 : null,
           },
           token
         );
-        Alert.alert('Thành công', 'Đã cập nhật thông tin ví thành công.');
+        showToast('Đã cập nhật thông tin ví thành công.', 'success');
       }
+      await loadWallets();
       router.back();
     } catch (error: any) {
-      Alert.alert('Lỗi', error.message || 'Không thể lưu ví');
+      showToast(error.message || 'Không thể lưu ví', 'error');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleDelete() {
+    if (isNew || !id) return;
+    try {
+      setLoading(true);
+      await walletService.deleteWallet(id, token);
+      await loadWallets();
+      showToast('Đã xóa tài khoản/ví.', 'success');
+      router.back();
+    } catch (error: any) {
+      showToast(error.message || 'Không thể xóa ví', 'error');
     } finally {
       setLoading(false);
     }
@@ -130,14 +149,14 @@ export default function WalletDetailScreen() {
             <Text style={styles.label}>Số tiền / Số dư hiện tại</Text>
             <TextInput
               value={balance}
-              onChangeText={setBalance}
+              onChangeText={(value) => setBalance(formatCurrencyInput(value))}
               keyboardType="numeric"
               placeholder="0"
               style={[styles.input, { fontSize: 22, fontWeight: '800' }]}
             />
           </View>
 
-          {walletType === 'SAVING' ? (
+          {currentWalletType === 'SAVING' ? (
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Lãi suất (%/năm)</Text>
               <TextInput
@@ -158,6 +177,11 @@ export default function WalletDetailScreen() {
             <Text style={styles.saveButtonText}>Lưu thông tin</Text>
           )}
         </TouchableOpacity>
+        {!isNew ? (
+          <TouchableOpacity onPress={handleDelete} disabled={loading} style={styles.deleteButton}>
+            <Text style={styles.deleteButtonText}>Xóa tài khoản</Text>
+          </TouchableOpacity>
+        ) : null}
       </ScrollView>
     </AppScreen>
   );
@@ -234,6 +258,19 @@ const styles = StyleSheet.create({
   },
   saveButtonText: {
     color: colors.white,
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  deleteButton: {
+    borderWidth: 1,
+    borderColor: colors.error,
+    height: 54,
+    borderRadius: radius.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  deleteButtonText: {
+    color: colors.error,
     fontSize: 16,
     fontWeight: '800',
   },

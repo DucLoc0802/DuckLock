@@ -26,6 +26,13 @@ export const TransactionsService = {
     const currency = "VND"; // Mặc định tiền tệ của giao dịch
     const amountInDefaultCurrency = dto.amount; // Mặc định tỉ giá 1:1 khi chưa có API tỉ giá
 
+    const checkBalanceQuery = `select balance from wallets where id = ? and user_id = ?`;
+    const [checkBalance] = await pool.query<any[]>(checkBalanceQuery, [dto.walletId, userId]);
+
+    if (dto.type === "expense" && checkBalance[0].balance < dto.amount) {
+      throw new AppError(400, "Không tìm thấy ví hoặc số dư không đủ");
+    }
+
     const query3 = `INSERT INTO transactions 
        (id, user_id, category_id, wallet_id, proof_image_id, amount, currency, amount_in_default_currency, type, transaction_date, description) 
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
@@ -99,7 +106,7 @@ export const TransactionsService = {
 
     const tx = rows[0];
     if (!tx) {
-      throw new Error("Không tìm thấy giao dịch");
+      throw new AppError(404, "Không tìm thấy giao dịch");
     }
 
     return {
@@ -131,15 +138,30 @@ export const TransactionsService = {
 
     const [result] = await pool.query<any>(query1, [id, userId]);
     if (result.affectedRows === 0) {
-      throw new Error("Không tìm thấy giao dịch");
+      throw new AppError(404, "Không tìm thấy giao dịch");
     }
 
-    const query2 = `UPDATE wallets
-    set balance = balance - ?
+    const checkTypeQuery = `select type from transactions where user_id = ? and id = ?`;
+    const [checkType] = await pool.query<any[]>(checkTypeQuery, [userId, result.walletId]);
+    if (checkType[0].type === 'EXPENSE') {
+      const query2 = `UPDATE wallets
+    set balance = balance + ?
     where user_id = ?
-    and id = ?
-    and type = 'BANK`
-    await pool.query(query2, [result.amount, userId, result.walletId]);
+    and id = ?`
+      await pool.query(query2, [result.amount, userId, result.walletId]);
+    } else if (checkType[0].type === 'INCOME') {
+      const checkBalanceQuery = `select balance from wallets where user_id = ? and id = ?`;
+      const [checkBalanceResult] = await pool.query<any>(checkBalanceQuery, [userId, result.walletId]);
+      if (checkBalanceResult[0].balance < result.amount) {
+        throw new AppError(400, "Lưu ý: Không thể xóa giao dịch này vì số tiền trong ví sẽ thành sô âm! Vui lòng kiểm tra kĩ lại giao dịch");
+      }
+      const query3 = `UPDATE wallets
+      set balance = balance - ?
+      where user_id = ?
+      and id = ?`
+      await pool.query(query3, [result.amount, userId, result.walletId]);
+    }
+
     return {
       success: true,
       message: "Xóa giao dịch thành công"
@@ -147,16 +169,7 @@ export const TransactionsService = {
   },
 
   updateTransaction: async (id: string, userId: string, dto: any): Promise<any> => {
-    // 1. Kiểm tra xem giao dịch có đúng là của người dùng này không
-    const [txs] = await pool.query<any[]>(
-      "SELECT id FROM transactions WHERE id = ? AND user_id = ? AND deleted_at IS NULL",
-      [id, userId]
-    );
-    if (txs.length === 0) {
-      throw new Error("Không tìm thấy giao dịch");
-    }
-
-    // 2. Xử lý tìm hoặc tạo mới danh mục nếu người dùng thay đổi category
+    // 1. Xử lý tìm hoặc tạo mới danh mục nếu người dùng thay đổi category
     let categoryId: string | null = null;
     if (dto.category !== undefined) {
       const categoryName = dto.category.trim();
@@ -176,7 +189,13 @@ export const TransactionsService = {
       }
     }
 
-    // 3. Thực thi câu lệnh SQL UPDATE lọc theo id và user_id
+    const checkBalanceQuery = `select balance from wallets where user_id = ? and id = ?`;
+    const [checkBalanceResult] = await pool.query<any>(checkBalanceQuery, [userId, dto.walletId]);
+    if (checkBalanceResult[0].balance < dto.amount) {
+      throw new AppError(400, "Số dư không đủ");
+    }
+
+    // 2. Thực thi câu lệnh SQL UPDATE lọc theo id và user_id
     const query = `UPDATE transactions
     SET
       amount = COALESCE(?, amount),
@@ -201,9 +220,10 @@ export const TransactionsService = {
       userId
     ];
 
-    const [result] = await pool.query<any>(query, params);
-    if (result.affectedRows === 0) {
-      throw new Error("Không tìm thấy giao dịch");
+    // 3. Check giao dịch có tồn tại không
+    const [checkResult] = await pool.query<any>(query, params);
+    if (checkResult.affectedRows === 0) {
+      throw new AppError(404, "Không tìm thấy giao dịch");
     }
 
     // 4. Trả về đối tượng giao dịch đầy đủ sau khi đã cập nhật

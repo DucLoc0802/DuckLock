@@ -12,9 +12,9 @@ export const BudgetsService = {
             throw new AppError(409, "Tên ngân sách đã tồn tại");
         }
         const id = randomUUID();
-        const createBudgetQuery = `insert into budgets (id, user_id, name, category_id, budget_month, amount, amount_in_default_currency, alert_threshold_percent)
+        const createBudgetQuery = `insert into budgets (user_id, name, category_id, budget_month, amount, amount_in_default_currency, alert_threshold_percent)
         values (?, ?, ?, ?, ?, ?, ?)`;
-        const result = await pool.query<any>(createBudgetQuery, [id, userId, dto.name, dto.categoryId, dto.budgetMonth, dto.amount, dto.amountInDefaultCurrency, dto.alertThresholdPercent]);
+        const result = await pool.query<any>(createBudgetQuery, [userId, dto.name, dto.categoryId, dto.budgetMonth, dto.amount, dto.amountInDefaultCurrency, dto.alertThresholdPercent]);
         return result;
     },
 
@@ -46,7 +46,7 @@ export const BudgetsService = {
         and id = ?`;
         const [result] = await pool.query<any>(updateBudgetQuery, [dto.name, dto.amount, dto.categoryId, dto.amountInDefaultCurrency, dto.alertThresholdPercent, dto.isActive, userId, id]);
         if (result.affectedRows === 0)
-            throw new Error("Không tìm thấy ngân sách");
+            throw new AppError(404, "Không tìm thấy ngân sách");
         return {
             id,
             userId,
@@ -66,7 +66,7 @@ export const BudgetsService = {
         and id = ?`;
         const [result] = await pool.query<any>(deleteBudgetQuery, [userId, id]);
         if (result.affectedRows === 0)
-            throw new Error("Không tìm thấy ngân sách");
+            throw new AppError(404, "Không tìm thấy ngân sách");
         return {
             success: true,
             message: "Xóa ngân sách thành công"

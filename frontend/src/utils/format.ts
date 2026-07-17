@@ -8,6 +8,17 @@ export function formatCompactCurrency(value: number | string) {
   return `${(num || 0).toLocaleString('vi-VN')}đ`;
 }
 
+export function formatCurrencyInput(text: string | number) {
+  const rawValue = String(text).replace(/[^\d]/g, '');
+  if (!rawValue) return '';
+  return Number(rawValue).toLocaleString('vi-VN');
+}
+
+export function parseCurrencyInput(text: string) {
+  const rawValue = text.replace(/[^\d]/g, '');
+  return rawValue ? Number(rawValue) : 0;
+}
+
 export function formatDate(input: string) {
   return new Date(input).toLocaleDateString('vi-VN', {
     day: '2-digit',

@@ -27,9 +27,18 @@ export const WalletsController = {
 
   updateWallet: asyncHandler(async (req: Request, res: Response) => {
     const { id } = req.params;
-    const { name, balance, type } = req.body;
+    const { name, balance, type, interestRatePercent } = req.body;
     const userId = req.userId!;
-    const wallet = await WalletsService.updateWallet(userId, id, name, balance, type);
+    if (!name) throw new AppError(400, "Vui lòng nhập tên ví");
+    // Service signature: (userId, id, type, name, balance, interestRatePercent)
+    const wallet = await WalletsService.updateWallet(
+      userId,
+      id,
+      type || 'BANK',
+      name,
+      Number(balance) || 0,
+      interestRatePercent !== undefined ? (interestRatePercent !== null ? Number(interestRatePercent) : null) : null
+    );
     return res.status(200).json({ success: true, data: wallet });
   }),
 

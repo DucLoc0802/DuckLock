@@ -69,4 +69,72 @@ export interface Wallet {
   balance: number;
   currency: string;
   interest_rate_percent: number | null;
+  created_at?: string | null;
+}
+
+export interface Budget {
+  id: string;
+  name: string;
+  categoryId: string | null;
+  amount: number;
+  currency: string;
+  budgetMonth: string;
+  amountInDefaultCurrency: number | null;
+  alertThresholdPercent: number;
+  isActive?: boolean;
+}
+
+export interface BudgetInput {
+  name: string;
+  categoryId?: string | null;
+  amount: number;
+  budgetMonth: string;
+  amountInDefaultCurrency?: number;
+  alertThresholdPercent?: number;
+  isActive?: boolean;
+}
+
+export type RecurringFrequency = 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY';
+export type BackendTransactionType = 'EXPENSE' | 'INCOME';
+
+export interface RecurringTransaction {
+  id: string;
+  walletId: string;
+  categoryId: string | null;
+  name: string;
+  amount: number;
+  type: BackendTransactionType;
+  description: string | null;
+  frequency: RecurringFrequency;
+  dayOfPeriod: number;
+  startDate: string;
+  endDate: string | null;
+  lastExecutedAt?: string | null;
+  nextExecutionDate: string;
+  isActive: boolean;
+  createdAt?: string;
+}
+
+export interface RecurringTransactionInput {
+  walletId: string;
+  categoryId?: string | null;
+  name: string;
+  amount: number;
+  type: BackendTransactionType;
+  description?: string | null;
+  frequency: RecurringFrequency;
+  dayOfPeriod: number;
+  startDate: string;
+  endDate?: string | null;
+  nextExecutionDate: string;
+  isActive?: boolean;
+}
+
+export interface WalletInterest {
+  walletId: string;
+  walletName: string;
+  balance: number;
+  interestRatePercent: number;
+  dailyInterest: number;
+  currency: string;
 }

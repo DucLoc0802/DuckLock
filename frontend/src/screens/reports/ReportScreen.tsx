@@ -60,17 +60,20 @@ export function ReportScreen() {
             flexDirection: 'row',
             alignItems: 'flex-end',
             gap: spacing.sm,
-            height: 180,
+            height: 200,
             marginTop: spacing.lg,
           }}>
           {(report?.dailySeries ?? []).map((value, index) => (
-            <View key={`${value}-${index}`} style={{ flex: 1, alignItems: 'center', gap: spacing.sm }}>
+            <View key={`${value}-${index}`} style={{ flex: 1, alignItems: 'center', gap: 4 }}>
+              <Text style={{ color: colors.textSecondary, fontSize: 10, fontWeight: '700' }}>
+                {value > 0 ? `${Math.round(value / 1000)}k` : ''}
+              </Text>
               <View
                 style={{
                   width: '100%',
                   height: Math.max(26, value / 2),
                   backgroundColor: index % 2 === 0 ? colors.primary : colors.accentYellow,
-                  borderRadius: radius.pill,
+                  borderRadius: 0,
                 }}
               />
               <Text style={{ color: colors.textMuted, fontSize: 12 }}>N{index + 1}</Text>

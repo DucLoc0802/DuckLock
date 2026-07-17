@@ -4,7 +4,7 @@ import { UserEntity } from "./entities/user.entity";
 import { randomUUID } from "crypto";
 import bcrypt from "bcrypt";
 import { JwtUtil } from "./utils/jwt.util";
-
+import { AppError } from "../../utils/app-errors";
 
 export const AuthService = {
   login: async (email: string, password: string) => {
@@ -16,13 +16,13 @@ export const AuthService = {
 
     const user = rows[0] as UserEntity | undefined;
     if (!user) {
-      throw new Error("Email hoặc mật khẩu không đúng");
+      throw new AppError(401, "Email hoặc mật khẩu không đúng");
     }
 
     // 2. So sánh mật khẩu thô
     const isMatch = await bcrypt.compare(password, user.password_hash as string);
     if (!isMatch) {
-      throw new Error("Email hoặc mật khẩu không đúng");
+      throw new AppError(401, "Email hoặc mật khẩu không đúng");
     }
 
     // Tạo mock token
@@ -50,7 +50,7 @@ export const AuthService = {
     );
 
     if (existing.length > 0) {
-      throw new Error("Email đã được sử dụng");
+      throw new AppError(409, "Email đã được sử dụng");
     }
 
     // 2. Sinh UUID ở Backend
