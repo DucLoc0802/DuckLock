@@ -4,7 +4,6 @@ import { authService } from '@/src/services/authService';
 import { categoryService } from '@/src/services/categoryService';
 import { proofImageService } from '@/src/services/proofImageService';
 import { reportService } from '@/src/services/reportService';
-import { transactionService } from '@/src/services/transactionService';
 import {
   AsyncState,
   Category,
@@ -15,8 +14,11 @@ import {
   User,
   Wallet,
 } from '@/src/types/piggy';
-import { walletService } from '@/src/services/walletService';
 import { Toast } from '@/components/ui/Toast';
+import { LocalDatabase } from '@/src/db/localDatabase';
+import { localWalletService } from '@/src/db/localWalletService';
+import { localTransactionService } from '@/src/db/localTransactionService';
+import { syncService } from '@/src/services/syncService';
 
 interface AppStoreValue {
   authState: AsyncState;
@@ -57,139 +59,192 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
   const [isOffline, setIsOffline] = useState(false);
   const [wallets, setWallets] = useState<Wallet[]>([]);
 
+  // 1. Khởi tạo SQLite database local khi mở app và phục hồi phiên đăng nhập
+  useEffect(() => {
+    async function initDbAndSession() {
+      try {
+        await LocalDatabase.initialize();
+        const db = await LocalDatabase.getDb();
+        
+        // Phục hồi session đăng nhập nếu có
+        const tokenRecord = await db.getFirstAsync<any>("SELECT value FROM sync_meta WHERE key = 'auth_token'");
+        const userRecord = await db.getFirstAsync<any>("SELECT value FROM sync_meta WHERE key = 'auth_user'");
+        
+        if (tokenRecord && tokenRecord.value && userRecord && userRecord.value) {
+          setToken(tokenRecord.value);
+          setUser(JSON.parse(userRecord.value));
+        } else {
+          // Nạp categories mặc định nếu chưa đăng nhập
+          categoryService.listCategories().then(setCategories);
+        }
+      } catch (err) {
+        console.error('Không thể khởi tạo database hoặc phục hồi session:', err);
+      }
+    }
+    initDbAndSession();
+  }, []);
+
   async function loadWallets() {
-    if (!token) return;
-    const data = await walletService.listWallets(token);
+    const data = await localWalletService.listWallets();
     setWallets(data);
   }
 
   async function refreshData() {
-    if (!token) return;
-    const [nextWallets, nextReport, nextWeeklyReport] = await Promise.all([
-      walletService.listWallets(token),
-      reportService.getMonthlySummary(token),
-      reportService.getWeeklySummary(token),
-    ]);
+    // Luôn luôn đọc dữ liệu từ SQLite local trước để UI hiển thị nhanh nhất
+    const localWallets = await localWalletService.listWallets();
+    const localTxs = await localTransactionService.listTransactions();
+    
+    setWallets(localWallets);
+    setTransactions(localTxs);
 
-    setWallets(nextWallets);
-    if (nextReport) setReport(nextReport);
-    if (nextWeeklyReport?.dailySeries) {
-      setWeeklyReport(nextWeeklyReport.dailySeries);
+    if (!token || isOffline) return;
+
+    try {
+      // Gọi ngầm đồng bộ dữ liệu với server
+      await syncService.syncAll(token);
+
+      // Sau khi đồng bộ thành công, đọc lại local database để cập nhật dữ liệu mới từ server về
+      const updatedWallets = await localWalletService.listWallets();
+      const updatedTxs = await localTransactionService.listTransactions();
+      
+      setWallets(updatedWallets);
+      setTransactions(updatedTxs);
+
+      // Cập nhật các báo cáo tuần/tháng online từ backend
+      const [nextReport, nextWeeklyReport] = await Promise.all([
+        reportService.getMonthlySummary(token),
+        reportService.getWeeklySummary(token),
+      ]);
+
+      if (nextReport) setReport(nextReport);
+      if (nextWeeklyReport?.dailySeries) {
+        setWeeklyReport(nextWeeklyReport.dailySeries);
+      }
+    } catch (error) {
+      console.log('Thông báo: Đồng bộ ngầm thất bại (thiết bị hoạt động ở chế độ offline).');
     }
   }
 
-  // 1. Tự động tải lại dữ liệu khi Token thay đổi (Người dùng đã Đăng nhập thành công)
+  // 2. Tải dữ liệu khi Token thay đổi (Đăng nhập/Đăng xuất)
   useEffect(() => {
-    // Tải danh mục giả lập (Frontend Mock)
+    // Nạp categories mặc định
     categoryService.listCategories().then(setCategories);
     
     if (token) {
+      // 1. Tải nhanh từ SQLite local để hiện UI lập tức
       loadWallets();
-      // KẾT NỐI THẬT: Lấy danh sách giao dịch từ MySQL Backend
-      transactionService.listTransactions(token).then((txs) => {
-        setTransactions(txs);
-        
-        // Trích xuất các danh mục động từ giao dịch trả về từ Backend
-        // để bổ sung vào categories state nếu chưa tồn tại
-        const dynamicCategories: any[] = [];
-        txs.forEach((tx: any) => {
-          if (tx.rawCategory) {
-            dynamicCategories.push(tx.rawCategory);
-          }
-        });
+      localTransactionService.listTransactions().then(setTransactions);
 
-        if (dynamicCategories.length > 0) {
-          setCategories((prev) => {
-            const nextCategories = [...prev];
-            dynamicCategories.forEach((cat) => {
-              if (!nextCategories.some((c) => c.id === cat.id)) {
-                nextCategories.push(cat);
-              }
-            });
-            return nextCategories;
-          });
-        }
+      // 2. Chạy đồng bộ ngầm và làm mới dữ liệu
+      syncService.syncAll(token).then(() => {
+        refreshData();
       });
-      // Lấy danh sách ảnh hóa đơn đang chờ xử lý từ Backend
+
+      // Nạp danh sách ảnh chờ xử lý
       proofImageService.listPending(token).then(setProofImages);
-      
-      // Gọi API lấy báo cáo tháng thật từ Backend
-      reportService.getMonthlySummary(token).then((data) => {
-        if (data) setReport(data);
-      });
-
-      // Gọi API lấy báo cáo tuần thật từ Backend
-      reportService.getWeeklySummary(token).then((data) => {
-        if (data && data.dailySeries) {
-          setWeeklyReport(data.dailySeries);
-        }
-      });
     } else {
-      // Nếu đăng xuất, xóa sạch danh sách giao dịch hiển thị
+      // Reset khi đăng xuất
       setTransactions([]);
       setWallets([]);
+      setReport(null);
+      setWeeklyReport([0, 0, 0, 0, 0, 0, 0]);
     }
   }, [token]);
 
   async function login(email: string, password: string) {
     setAuthState('loading');
     try {
-      // Gọi API đăng nhập và cập nhật thông tin người dùng nếu thành công
       const result = await authService.login(email, password);
       setUser(result.user);
       setToken(result.token);
+      
+      // Lưu session vào SQLite
+      const db = await LocalDatabase.getDb();
+      await db.runAsync("INSERT OR REPLACE INTO sync_meta (key, value) VALUES ('auth_token', ?)", [result.token]);
+      await db.runAsync("INSERT OR REPLACE INTO sync_meta (key, value) VALUES ('auth_user', ?)", [JSON.stringify(result.user)]);
+      
       setAuthState('success');
     } catch (error) {
-      // Khi lỗi xảy ra (sai mật khẩu, server lỗi...), phải reset authState
-      // về 'idle' để nút bấm trở lại bình thường, không bị kẹt ở trạng thái 'loading'
       setAuthState('idle');
-      throw error; // Ném lỗi lên trên để LoginScreen hiển thị thông báo lỗi cho người dùng
+      throw error;
     }
   }
 
   async function register(name: string, email: string, password: string) {
     setAuthState('loading');
     try {
-      // Gọi API đăng ký và tự động đăng nhập người dùng sau khi thành công
       const result = await authService.register(name, email, password);
       setUser(result.user);
       setToken(result.token);
+
+      // Lưu session vào SQLite
+      const db = await LocalDatabase.getDb();
+      await db.runAsync("INSERT OR REPLACE INTO sync_meta (key, value) VALUES ('auth_token', ?)", [result.token]);
+      await db.runAsync("INSERT OR REPLACE INTO sync_meta (key, value) VALUES ('auth_user', ?)", [JSON.stringify(result.user)]);
+
       setAuthState('success');
     } catch (error) {
-      // Tương tự login, phải reset lại trạng thái để nút không bị kẹt
       setAuthState('idle');
       throw error;
     }
   }
 
-  function logout() {
+  async function logout() {
     setUser(null);
     setToken(null);
     setAuthState('idle');
+    
+    // Xóa session và dọn sạch SQLite local
+    try {
+      const db = await LocalDatabase.getDb();
+      await db.runAsync("DELETE FROM sync_meta WHERE key IN ('auth_token', 'auth_user', 'last_pulled_at')");
+      await db.runAsync("DELETE FROM wallets");
+      await db.runAsync("DELETE FROM transactions");
+      await db.runAsync("DELETE FROM budgets");
+      await db.runAsync("DELETE FROM categories");
+      await db.runAsync("DELETE FROM sync_queue");
+    } catch (err) {
+      console.error('Lỗi dọn dẹp database khi đăng xuất:', err);
+    }
   }
 
   async function addTransaction(input: CreateTransactionInput) {
-    // Tìm tên danh mục tiếng Việt từ categoryId (ví dụ: 'food' -> 'Ăn uống')
-    // Vì Backend MySQL lưu và kiểm soát theo Tên danh mục (categoryName)
-    const categoryName = categories.find((c) => c.id === input.categoryId)?.name || 'Khác';
+    // 1. Thêm trực tiếp vào SQLite local (Cập nhật số dư ví và tạo queue đồng bộ tự động)
+    const created = await localTransactionService.createTransaction(input);
     
-    // Truyền thêm biến token và categoryName để lưu vào DB MySQL
-    const created = await transactionService.createTransaction(input, token, isOffline, categoryName);
+    // 2. Cập nhật state UI nhanh
     setTransactions((current) => [created, ...current]);
-    await refreshData();
+    
+    // 3. Kích hoạt đồng bộ ngầm lên server
+    if (token && !isOffline) {
+      syncService.syncAll(token).then(() => refreshData());
+    } else {
+      await refreshData();
+    }
   }
 
   async function updateTransaction(id: string, input: CreateTransactionInput) {
-    const categoryName = categories.find((c) => c.id === input.categoryId)?.name || 'Khác';
-    const updated = await transactionService.updateTransaction(id, input, token, categoryName);
-    setTransactions((current) => current.map((t) => (t.id === id ? updated : t)));
-    await refreshData();
+    // 1. Cập nhật trực tiếp vào SQLite local
+    await localTransactionService.updateTransaction(id, input);
+    
+    // 2. Kích hoạt đồng bộ ngầm lên server
+    if (token && !isOffline) {
+      syncService.syncAll(token).then(() => refreshData());
+    } else {
+      await refreshData();
+    }
   }
 
   async function deleteTransaction(id: string) {
-    await transactionService.deleteTransaction(id, token);
-    setTransactions((current) => current.filter((tx) => tx.id !== id));
-    await refreshData();
+    // 1. Xóa trực tiếp trong SQLite local
+    await localTransactionService.deleteTransaction(id);
+    
+    // 2. Kích hoạt đồng bộ ngầm lên server
+    if (token && !isOffline) {
+      syncService.syncAll(token).then(() => refreshData());
+    } else {
+      await refreshData();
+    }
   }
 
   async function uploadProofImage(imageUri: string) {

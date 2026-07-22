@@ -18,15 +18,26 @@ import { colors, radius, spacing } from '@/src/theme/tokens';
 import { formatCompactCurrency, getMonthLabel } from '@/src/utils/format';
 
 export function HomeScreen() {
-  const { user, transactions, categories, report, weeklyReport, isOffline } = useAppStore();
+  const { user, transactions, categories, report, weeklyReport, isOffline, refreshData } = useAppStore();
   const [drawerVisible, setDrawerVisible] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const handleRefresh = async () => {
+    try {
+      setRefreshing(true);
+      await refreshData();
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
   const latest = transactions.slice(0, 5);
 
   const maxWeeklyExpense = Math.max(...(weeklyReport || []), 1);
 
   return (
     <>
-    <AppScreen scrollable>
+    <AppScreen scrollable refreshing={refreshing} onRefresh={handleRefresh}>
       <AppHeader
         title={`Xin chào, ${user?.name ?? 'bạn'}`}
         subtitle="Hôm nay Piggy giúp bạn giữ ví gọn hơn"

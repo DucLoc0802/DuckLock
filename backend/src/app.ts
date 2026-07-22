@@ -6,6 +6,8 @@ import { WalletModule } from "./modules/wallets/wallets.module";
 import { ReportsModule } from "./modules/reports/reports.module";
 import { BudgetModule } from "./modules/budgets/budgets.module";
 import { RecurringTransactionModule } from "./modules/recurring_transactions/recurring-transactions.module";
+import { SyncModule } from "./modules/sync/sync.module";
+import { ProofImagesModule } from "./modules/proof-images/proof-images.module";
 import { AppError } from "./utils/app-errors";
 
 const app = express();
@@ -13,6 +15,8 @@ const app = express();
 // Middlewares toàn cục
 app.use(cors());
 app.use(express.json());
+// Cấu hình phục vụ thư mục chứa ảnh tĩnh uploads từ client
+app.use("/uploads", express.static("uploads"));
 
 // Tuyến đường hệ thống (Health Check)
 app.get("/", (req, res) =>
@@ -33,6 +37,8 @@ app.use("/api/wallets", WalletModule.router);
 app.use("/api/reports", ReportsModule.router);
 app.use("/api/budgets", BudgetModule.router);
 app.use("/api/recurring-transactions", RecurringTransactionModule.router);
+app.use("/api/sync", SyncModule.router);
+app.use("/api/proof-images", ProofImagesModule.router);
 // Xử lý Route không tìm thấy (404 Handler)
 app.use((req, res) =>
   res.status(404).json({ message: `Route ${req.originalUrl} not found` })

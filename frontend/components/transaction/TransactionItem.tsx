@@ -38,9 +38,18 @@ export function TransactionItem({
           borderRadius: 18,
           alignItems: 'center',
           justifyContent: 'center',
-          backgroundColor: category?.color ?? colors.primarySoft,
+          backgroundColor: item.imageUri ? 'transparent' : (category?.color ?? colors.primarySoft),
+          overflow: 'hidden',
         }}>
-        <Text style={{ fontSize: 22 }}>{category?.icon ?? '💸'}</Text>
+        {item.imageUri ? (
+          <Image
+            source={{ uri: item.imageUri }}
+            style={{ width: 48, height: 48 }}
+            contentFit="cover"
+          />
+        ) : (
+          <Text style={{ fontSize: 22 }}>{category?.icon ?? '💸'}</Text>
+        )}
       </View>
       <View style={{ flex: 1 }}>
         <Text style={{ fontWeight: '700', color: colors.textPrimary }}>
@@ -50,13 +59,6 @@ export function TransactionItem({
           {category?.name} • {formatDate(item.transactionDate)}
         </Text>
       </View>
-      {item.imageUri ? (
-        <Image
-          source={{ uri: item.imageUri }}
-          style={{ width: 42, height: 42, borderRadius: radius.md }}
-          contentFit="cover"
-        />
-      ) : null}
       <View style={{ alignItems: 'flex-end', minWidth: 84 }}>
         <Text
           style={{

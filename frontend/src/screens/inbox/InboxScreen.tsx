@@ -113,7 +113,7 @@ export function InboxScreen() {
             {/* Top Bar: Nút đóng camera & Nút Flash */}
             <View style={styles.cameraHeader}>
               <TouchableOpacity
-                onPress={() => setIsCameraOpen(false)}
+                onPress={() => router.push('/(tabs)/home')}
                 style={styles.circleIconButton}
               >
                 <Ionicons name="close" size={24} color={colors.white} />
@@ -146,24 +146,7 @@ export function InboxScreen() {
 
             {/* Bottom Controls: Nút chụp ảnh */}
             <View style={styles.cameraFooter}>
-              <TouchableOpacity
-                onPress={() => setIsCameraOpen(false)}
-                style={styles.listPreviewButton}
-              >
-                {proofImages.length > 0 ? (
-                  <Image
-                    source={{ uri: proofImages[0].imageUri }}
-                    style={styles.listPreviewImage}
-                  />
-                ) : (
-                  <Ionicons name="images-outline" size={24} color={colors.white} />
-                )}
-                {proofImages.length > 0 && (
-                  <View style={styles.badge}>
-                    <Text style={styles.badgeText}>{proofImages.length}</Text>
-                  </View>
-                )}
-              </TouchableOpacity>
+              <View style={{ width: 50 }} />
 
               <TouchableOpacity
                 onPress={handleCapture}
@@ -189,51 +172,10 @@ export function InboxScreen() {
     );
   }
 
-  // MÀN HÌNH DANH SÁCH HÀNG CHỜ XỬ LÝ (QUEUE LIST)
   return (
-    <AppScreen scrollable>
-      <AppHeader
-        title={`Hàng chờ (${proofImages.length})`}
-        subtitle="Ảnh minh chứng đang chờ hệ thống xử lý"
-      />
-      
-      {/* Nút mở lại camera */}
-      <TouchableOpacity
-        onPress={() => setIsCameraOpen(true)}
-        style={styles.openCameraButton}
-      >
-        <Ionicons name="camera" size={20} color={colors.white} />
-        <Text style={styles.openCameraButtonText}>Mở Camera Chụp Thêm</Text>
-      </TouchableOpacity>
-
-      {proofImages.length === 0 ? (
-        <EmptyState
-          title="Không có ảnh nào"
-          description="Bấm mở Camera chụp ảnh hóa đơn để bắt đầu quét chi tiêu."
-        />
-      ) : (
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md, marginTop: spacing.md }}>
-          {proofImages.map((item) => (
-            <View key={item.id} style={styles.imageCard}>
-              <Image
-                source={{ uri: item.imageUri }}
-                style={{ width: '100%', height: 170 }}
-                contentFit="cover"
-              />
-              <View style={{ padding: spacing.md }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <View style={styles.pendingDot} />
-                  <Text style={{ color: colors.textPrimary, fontWeight: '700' }}>Đang chờ xử lý</Text>
-                </View>
-                <Text style={{ color: colors.textSecondary, marginTop: 4, fontSize: 12 }}>
-                  {formatTime(item.capturedAt)}
-                </Text>
-              </View>
-            </View>
-          ))}
-        </View>
-      )}
-    </AppScreen>
+    <View style={styles.loadingContainer}>
+      <ActivityIndicator size="large" color="#10B981" />
+    </View>
   );
 }
 
@@ -339,39 +281,6 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
     paddingHorizontal: 20,
   },
-  listPreviewButton: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    overflow: 'visible',
-    borderWidth: 1.5,
-    borderColor: 'rgba(255, 255, 255, 0.5)',
-  },
-  listPreviewImage: {
-    width: '100%',
-    height: '100%',
-    borderRadius: 24,
-  },
-  badge: {
-    position: 'absolute',
-    top: -5,
-    right: -5,
-    backgroundColor: '#FF4D4D',
-    minWidth: 20,
-    height: 20,
-    borderRadius: 10,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 4,
-  },
-  badgeText: {
-    color: '#fff',
-    fontSize: 11,
-    fontWeight: 'bold',
-  },
   captureButton: {
     width: 80,
     height: 80,
@@ -398,34 +307,5 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '700',
-  },
-  openCameraButton: {
-    flexDirection: 'row',
-    backgroundColor: '#10B981',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: spacing.md,
-    borderRadius: radius.lg,
-    gap: spacing.sm,
-    marginBottom: spacing.md,
-  },
-  openCameraButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  imageCard: {
-    width: '47%',
-    backgroundColor: colors.white,
-    borderRadius: radius.xl,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  pendingDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#FFAD33', // Màu cam cảnh báo đang chờ xử lý
   },
 });
