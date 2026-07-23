@@ -6,6 +6,7 @@ import { Animated, Dimensions, Easing, Pressable, StyleSheet, Text, View } from 
 import { colors, radius, shadows, spacing } from '@/src/theme/tokens';
 
 const MENU_ITEMS = [
+  { label: 'Hồ sơ cá nhân', subtitle: 'Thông tin tài khoản và đăng xuất', icon: 'person-outline' as const, href: '/profile' as Href },
   { label: 'Ngân sách', subtitle: 'Theo dõi hạn mức tháng', icon: 'pie-chart-outline' as const, href: '/budget' as Href },
   { label: 'Giao dịch định kỳ', subtitle: 'Lương, hóa đơn, tiết kiệm', icon: 'repeat-outline' as const, href: '/recurring' as Href },
   { label: 'Ví & lãi tiết kiệm', subtitle: 'Nhận lãi cho sổ tiết kiệm', icon: 'trending-up-outline' as const, href: '/wallet-category/SAVING' as Href },

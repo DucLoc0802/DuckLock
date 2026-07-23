@@ -105,10 +105,10 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="profile"
+        name="budget"
         options={{
-          title: 'Hồ sơ',
-          tabBarIcon: ({ color }) => <Ionicons size={22} name="person" color={color} />,
+          title: 'Hạn mức',
+          tabBarIcon: ({ color }) => <Ionicons size={22} name="bar-chart-outline" color={color} />,
         }}
       />
     </Tabs>

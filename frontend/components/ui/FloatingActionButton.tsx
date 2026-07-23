@@ -12,18 +12,16 @@ export function FloatingActionButton({ onPress }: { onPress: () => void }) {
           position: 'absolute',
           right: 20,
           bottom: 28,
-          height: 62,
-          borderRadius: radius.pill,
+          width: 56,
+          height: 56,
+          borderRadius: 28,
           backgroundColor: colors.primaryDark,
-          flexDirection: 'row',
           alignItems: 'center',
-          gap: 10,
-          paddingHorizontal: 20,
+          justifyContent: 'center',
         },
         shadows.fab,
       ]}>
-      <Ionicons name="add" size={22} color={colors.white} />
-      <Text style={{ color: colors.white, fontWeight: '800' }}>Thêm</Text>
+      <Ionicons name="add" size={26} color={colors.white} />
     </Pressable>
   );
 }

@@ -1,4 +1,6 @@
 import { Text, View } from 'react-native';
+import { useFocusEffect } from 'expo-router';
+import { useState, useCallback } from 'react';
 
 import { AppHeader } from '@/components/ui/AppHeader';
 import { AppScreen } from '@/components/ui/AppScreen';
@@ -8,10 +10,28 @@ import { colors, radius, spacing } from '@/src/theme/tokens';
 import { formatCompactCurrency } from '@/src/utils/format';
 
 export function ReportScreen() {
-  const { report, categories } = useAppStore();
+  const { report, categories, refreshData } = useAppStore();
+  const [refreshing, setRefreshing] = useState(false);
+
+  const handleRefresh = useCallback(async () => {
+    try {
+      setRefreshing(true);
+      await refreshData();
+    } catch (error) {
+      console.error('Lỗi khi tải lại báo cáo:', error);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [refreshData]);
+
+  useFocusEffect(
+    useCallback(() => {
+      refreshData();
+    }, [])
+  );
 
   return (
-    <AppScreen scrollable>
+    <AppScreen scrollable refreshing={refreshing} onRefresh={handleRefresh}>
       <AppHeader title="Báo cáo" subtitle="Piggy tóm tắt tháng này cho bạn" />
       <CuteCard>
         <Text style={{ fontSize: 18, fontWeight: '800', color: colors.textPrimary }}>

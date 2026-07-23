@@ -29,7 +29,16 @@ export const localTransactionService = {
     const id = generateId();
     const now = new Date().toISOString();
 
-    // 2.1 Cập nhật số dư ví tương ứng trong SQLite local
+    // 2.1 Kiểm tra số dư ví nếu là giao dịch chi tiêu (EXPENSE)
+    const wallet = await db.getFirstAsync<any>('SELECT balance, name FROM wallets WHERE id = ?', [input.walletId]);
+    if (input.type === 'expense') {
+      const currentBalance = wallet ? wallet.balance : 0;
+      if (currentBalance < input.amount) {
+        throw new Error(`Số dư ví "${wallet?.name || 'Tài khoản'}" không đủ để thực hiện chi tiêu này.`);
+      }
+    }
+
+    // Cập nhật số dư ví tương ứng trong SQLite local
     const changeAmount = input.type === 'expense' ? -input.amount : input.amount;
     await db.runAsync(
       'UPDATE wallets SET balance = balance + ?, updated_at = ? WHERE id = ?',
@@ -39,8 +48,8 @@ export const localTransactionService = {
     // 2.2 Lưu giao dịch vào SQLite local (Lưu cả image_uri)
     await db.runAsync(
       `INSERT INTO transactions (id, category_id, wallet_id, amount, currency, type, note, transaction_date, image_uri, created_at, updated_at, sync_status)
-       VALUES (?, ?, ?, ?, 'VND', ?, ?, ?, ?, ?, ?, ?, 'pending_create')`,
-      [id, input.categoryId, input.walletId, input.amount, input.type, input.note, input.transactionDate, input.imageUri || null, now, now]
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [id, input.categoryId, input.walletId, input.amount, 'VND', input.type, input.note, input.transactionDate, input.imageUri || null, now, now, 'pending_create']
     );
 
     // 2.3 Đăng ký thay đổi vào sync_queue để backend thực thi đồng bộ
@@ -81,6 +90,36 @@ export const localTransactionService = {
     // 3.1 Đọc lại giao dịch cũ để tính toán thay đổi số dư ví
     const oldTx = await db.getFirstAsync<any>('SELECT * FROM transactions WHERE id = ?', [id]);
     if (oldTx) {
+      // Đọc ví mới để check số dư sau khi thay đổi
+      const oldWallet = await db.getFirstAsync<any>('SELECT balance, name FROM wallets WHERE id = ?', [oldTx.wallet_id]);
+      const newWallet = await db.getFirstAsync<any>('SELECT balance, name FROM wallets WHERE id = ?', [input.walletId]);
+      
+      // Giả lập số dư dự kiến sau khi sửa giao dịch:
+      let expectedBalance = newWallet ? newWallet.balance : 0;
+      if (oldTx.wallet_id === input.walletId) {
+        const refundOld = oldTx.type === 'expense' ? oldTx.amount : -oldTx.amount;
+        const changeNew = input.type === 'expense' ? -input.amount : input.amount;
+        expectedBalance = expectedBalance + refundOld + changeNew;
+      } else {
+        // Nếu chuyển sang ví khác:
+        // Hoàn trả thu nhập (trừ tiền ví cũ) thì có thể bị âm ví cũ
+        if (oldTx.type === 'income') {
+          const oldExpected = (oldWallet ? oldWallet.balance : 0) - oldTx.amount;
+          if (oldExpected < 0) {
+            throw new Error(`Không thể sửa giao dịch vì số dư ví cũ "${oldWallet?.name}" sẽ bị âm.`);
+          }
+        }
+        // Check ví mới sau khi trừ chi tiêu
+        if (input.type === 'expense') {
+          expectedBalance = expectedBalance - input.amount;
+        }
+      }
+
+      if (expectedBalance < 0) {
+        throw new Error(`Số dư ví "${newWallet?.name || 'Tài khoản'}" không đủ để sửa giao dịch này.`);
+      }
+
+      // Đã hợp lệ, tiến hành cập nhật ví
       // Hoàn lại tiền cho ví cũ
       const oldRefund = oldTx.type === 'expense' ? oldTx.amount : -oldTx.amount;
       await db.runAsync(

@@ -75,6 +75,24 @@ VALUES
       query,
       [walletId1, userId, walletId2, userId, walletId3, userId]
     );
+
+    // Seed 9 danh mục mặc định cho user mới có ID tĩnh đồng nhất với client SQLite
+    const categoriesQuery = `INSERT INTO categories (id, user_id, name, icon, color, is_default, created_at, updated_at)
+VALUES 
+  ('food', ?, 'Ăn uống', '🍜', '#FFD966', true, NOW(), NOW()),
+  ('transport', ?, 'Di chuyển', '🛵', '#CDEFD5', true, NOW(), NOW()),
+  ('shopping', ?, 'Mua sắm', '🛍️', '#FFD8BE', true, NOW(), NOW()),
+  ('bills', ?, 'Hóa đơn', '🧾', '#DDEBFF', true, NOW(), NOW()),
+  ('fun', ?, 'Giải trí', '🎮', '#FEE2E2', true, NOW(), NOW()),
+  ('health', ?, 'Sức khỏe', '💊', '#DCFCE7', true, NOW(), NOW()),
+  ('salary', ?, 'Lương', '💰', '#D6F5DD', true, NOW(), NOW()),
+  ('gym', ?, 'Gym', '💪', '#E9D5FF', false, NOW(), NOW()),
+  ('coffee', ?, 'Cà phê', '☕', '#FDE68A', false, NOW(), NOW())
+`;
+    await pool.query(categoriesQuery, [
+      userId, userId, userId, userId, userId, userId, userId, userId, userId
+    ]);
+
     const accessToken = JwtUtil.generateAccessToken({ userId, email: dto.email });
     const refreshToken = JwtUtil.generateRefreshToken({ userId, email: dto.email });
 

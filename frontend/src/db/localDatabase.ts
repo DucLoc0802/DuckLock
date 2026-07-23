@@ -1,4 +1,5 @@
 import * as SQLite from 'expo-sqlite';
+import { localCategoryService } from './localCategoryService';
 
 let dbInstance: SQLite.SQLiteDatabase | null = null;
 
@@ -105,7 +106,7 @@ export const LocalDatabase = {
       // Nâng cấp database mượt mà: tự động kiểm tra và thêm cột image_uri cho database cũ
       try {
         const columns = await db.getAllAsync<any>('PRAGMA table_info(transactions)');
-        const hasImageUri = columns.some(col => col.name === 'image_uri');
+        const hasImageUri = columns.some((col: any) => col.name === 'image_uri');
         if (!hasImageUri) {
           await db.execAsync('ALTER TABLE transactions ADD COLUMN image_uri TEXT;');
           console.log('- Đã thêm cột image_uri vào bảng transactions SQLite thành công.');
@@ -113,6 +114,24 @@ export const LocalDatabase = {
       } catch (colErr) {
         console.error('Lỗi khi kiểm tra/nâng cấp cột image_uri:', colErr);
       }
+
+      // Tự động kiểm tra và thêm cột sync_status cho các bảng SQLite cũ nếu thiếu
+      const tablesToCheck = ['wallets', 'categories', 'transactions', 'budgets'];
+      for (const table of tablesToCheck) {
+        try {
+          const cols = await db.getAllAsync<any>(`PRAGMA table_info(${table})`);
+          const hasSyncStatus = cols.some((col: any) => col.name === 'sync_status');
+          if (!hasSyncStatus) {
+            await db.execAsync(`ALTER TABLE ${table} ADD COLUMN sync_status TEXT DEFAULT 'synced';`);
+            console.log(`- Đã thêm cột sync_status vào bảng ${table} SQLite thành công.`);
+          }
+        } catch (colErr) {
+          console.error(`Lỗi khi nâng cấp cột sync_status cho bảng ${table}:`, colErr);
+        }
+      }
+
+      // Seed danh mục mặc định
+      await localCategoryService.seedDefaultCategories();
 
       console.log('➔ SQLite Database initialized successfully!');
     } catch (error) {

@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
-import { Href, router, useLocalSearchParams } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { Href, router, useLocalSearchParams, useFocusEffect } from 'expo-router';
+import { useState, useCallback } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -9,6 +9,7 @@ import {
   Text,
   TouchableOpacity,
   View,
+  RefreshControl,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 
@@ -56,25 +57,40 @@ export default function WalletCategoryScreen() {
   const [wallets, setWallets] = useState<Wallet[]>([]);
   const [interestDetails, setInterestDetails] = useState<WalletInterest[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-  useEffect(() => {
-    async function load() {
-      try {
-        setLoading(true);
-        const allWallets = await walletService.listWallets(token);
-        const filtered = allWallets.filter((w) => w.type === walletType);
-        setWallets(filtered);
-        if (walletType === 'SAVING') {
-          setInterestDetails(await walletService.calculateInterest(token));
-        }
-      } catch (error) {
-        console.error('Lỗi khi tải danh sách ví:', error);
-      } finally {
-        setLoading(false);
+  const load = useCallback(async () => {
+    try {
+      setLoading(true);
+      const allWallets = await walletService.listWallets(token);
+      const filtered = allWallets.filter((w) => w.type === walletType);
+      setWallets(filtered);
+      if (walletType === 'SAVING') {
+        setInterestDetails(await walletService.calculateInterest(token));
       }
+    } catch (error) {
+      console.error('Lỗi khi tải danh sách ví:', error);
+    } finally {
+      setLoading(false);
     }
-    load();
   }, [token, walletType]);
+
+  useFocusEffect(
+    useCallback(() => {
+      load();
+    }, [load])
+  );
+
+  const handleRefresh = useCallback(async () => {
+    try {
+      setRefreshing(true);
+      await load();
+    } catch (error) {
+      console.error('Lỗi khi làm mới ví:', error);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [load]);
 
   const totalBalance = wallets.reduce((sum, w) => sum + w.balance, 0);
 
@@ -91,7 +107,7 @@ export default function WalletCategoryScreen() {
     }
   }
 
-  if (loading) {
+  if (loading && wallets.length === 0) {
     return (
       <View style={styles.centerContainer}>
         <ActivityIndicator size="large" color={colors.primaryDark} />
@@ -101,16 +117,32 @@ export default function WalletCategoryScreen() {
   }
 
   return (
-    <AppScreen>
+    <AppScreen scrollable={false}>
       <View style={styles.headerRow}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+        <TouchableOpacity onPress={() => {
+          if (router.canGoBack()) {
+            router.back();
+          } else {
+            router.replace('/');
+          }
+        }} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>{meta.title}</Text>
         <View style={{ width: 44 }} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <ScrollView 
+        contentContainerStyle={styles.scrollContent} 
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            colors={[colors.primaryDark]}
+          />
+        }
+      >
         <LinearGradient
           colors={meta.gradient}
           start={{ x: 0, y: 0 }}

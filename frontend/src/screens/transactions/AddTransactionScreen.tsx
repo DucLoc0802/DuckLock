@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
 import { Alert, Pressable, Text, TextInput, View, TouchableOpacity } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 
 import { AppHeader } from '@/components/ui/AppHeader';
 import { AppScreen } from '@/components/ui/AppScreen';
@@ -16,16 +17,43 @@ import { formatCurrencyInput, parseCurrencyInput } from '@/src/utils/format';
 export function AddTransactionScreen() {
   const { categories, addTransaction, isOffline, syncCategory, wallets, showToast } = useAppStore();
   const { imageUri } = useLocalSearchParams<{ imageUri?: string }>();
+
+  async function pickImage() {
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        showToast('Cần quyền truy cập thư viện để chọn ảnh hóa đơn', 'error');
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        router.setParams({ imageUri: result.assets[0].uri });
+      }
+    } catch (err: any) {
+      console.error('Lỗi khi chọn ảnh:', err);
+      showToast('Không thể chọn ảnh từ thư viện', 'error');
+    }
+  }
   
+  const isIncomeCategory = useCallback((item: any) => {
+    return item.id === 'salary' || item.name === 'Lương' || item.name === 'Thu nhập';
+  }, []);
+
   const expenseCategories = useMemo(
-    () => categories.filter((item) => item.id !== 'salary'),
-    [categories],
+    () => categories.filter((item) => !isIncomeCategory(item)),
+    [categories, isIncomeCategory],
   );
   const [amount, setAmount] = useState('');
   const [type, setType] = useState<'expense' | 'income'>('expense');
   const availableCategories = useMemo(
-    () => (type === 'income' ? categories.filter((item) => item.id === 'salary') : expenseCategories),
-    [categories, expenseCategories, type],
+    () => (type === 'income' ? categories.filter((item) => isIncomeCategory(item)) : expenseCategories),
+    [categories, expenseCategories, type, isIncomeCategory],
   );
   const [categoryId, setCategoryId] = useState(expenseCategories[0]?.id ?? '');
   const [transactionDate, setTransactionDate] = useState(new Date().toISOString().slice(0, 10));
@@ -93,7 +121,11 @@ export function AddTransactionScreen() {
         imageUri, // Truyền đường dẫn ảnh vừa chụp xuống store
       });
       showToast(isOffline ? 'Đã lưu và chờ đồng bộ' : 'Đã lưu giao dịch thành công!', 'success');
-      router.back();
+      if (router.canGoBack()) {
+        router.back();
+      } else {
+        router.replace('/');
+      }
     } catch (error: any) {
       showToast(error.message || 'Lưu giao dịch thất bại', 'error');
     } finally {
@@ -129,7 +161,29 @@ export function AddTransactionScreen() {
             <Ionicons name="close" size={20} color={colors.white} />
           </TouchableOpacity>
         </View>
-      ) : null}
+      ) : (
+        <TouchableOpacity
+          onPress={pickImage}
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: colors.surface,
+            borderWidth: 1.5,
+            borderStyle: 'dashed',
+            borderColor: colors.primaryDark,
+            borderRadius: radius.xl,
+            height: 56,
+            marginBottom: spacing.md,
+            gap: spacing.sm,
+          }}
+        >
+          <Ionicons name="images-outline" size={20} color={colors.primaryDark} />
+          <Text style={{ color: colors.primaryDark, fontWeight: '700', fontSize: 15 }}>
+            Tải lên ảnh hóa đơn
+          </Text>
+        </TouchableOpacity>
+      )}
 
       <View style={{ gap: spacing.lg }}>
         <View>
@@ -307,7 +361,13 @@ export function AddTransactionScreen() {
 
       <View style={{ gap: spacing.md, marginTop: spacing.xl }}>
         <PrimaryButton label="Lưu giao dịch" onPress={onSave} loading={loading} />
-        <SecondaryButton label="Hủy" onPress={() => router.back()} />
+        <SecondaryButton label="Hủy" onPress={() => {
+          if (router.canGoBack()) {
+            router.back();
+          } else {
+            router.replace('/');
+          }
+        }} />
       </View>
     </AppScreen>
   );

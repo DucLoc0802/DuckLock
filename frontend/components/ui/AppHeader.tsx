@@ -25,7 +25,13 @@ export function AppHeader({ title, subtitle, back, rightSlot, onMenuPress }: App
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md, flex: 1 }}>
         {back ? (
           <Pressable
-            onPress={() => router.back()}
+            onPress={() => {
+              if (router.canGoBack()) {
+                router.back();
+              } else {
+                router.replace('/');
+              }
+            }}
             style={{
               width: 42,
               height: 42,

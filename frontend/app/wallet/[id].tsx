@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
-import { router, useLocalSearchParams } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { router, useLocalSearchParams, useFocusEffect } from 'expo-router';
+import { useEffect, useState, useCallback } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -14,7 +14,8 @@ import {
 
 import { AppScreen } from '@/components/ui/AppScreen';
 import { useAppStore } from '@/src/store/app-store';
-import { walletService } from '@/src/services/walletService';
+import { localWalletService } from '@/src/db/localWalletService';
+import { syncService } from '@/src/services/syncService';
 import { colors, radius, spacing } from '@/src/theme/tokens';
 import { WalletType } from '@/src/types/piggy';
 import { formatCurrencyInput, parseCurrencyInput } from '@/src/utils/format';
@@ -33,28 +34,29 @@ export default function WalletDetailScreen() {
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(false);
 
-  useEffect(() => {
-    async function loadWallet() {
-      if (isNew || !id) return;
-      try {
-        setFetching(true);
-        // Lấy thông tin ví từ danh sách ví
-        const allWallets = await walletService.listWallets(token);
-        const wallet = allWallets.find((w) => w.id === id);
-        if (wallet) {
-          setName(wallet.name);
-          setBalance(formatCurrencyInput(wallet.balance));
-          setInterestRate(wallet.interest_rate_percent ? String(wallet.interest_rate_percent) : '');
-          setCurrentWalletType(wallet.type);
+  useFocusEffect(
+    useCallback(() => {
+      async function loadWallet() {
+        if (isNew || !id) return;
+        try {
+          setFetching(true);
+          const allWallets = await localWalletService.listWallets();
+          const wallet = allWallets.find((w) => w.id === id);
+          if (wallet) {
+            setName(wallet.name);
+            setBalance(formatCurrencyInput(wallet.balance));
+            setInterestRate(wallet.interest_rate_percent ? String(wallet.interest_rate_percent) : '');
+            setCurrentWalletType(wallet.type);
+          }
+        } catch (error) {
+          console.error('Lỗi khi tải thông tin ví local:', error);
+        } finally {
+          setFetching(false);
         }
-      } catch (error) {
-        console.error('Lỗi khi tải thông tin ví:', error);
-      } finally {
-        setFetching(false);
       }
-    }
-    loadWallet();
-  }, [id, isNew, token]);
+      loadWallet();
+    }, [id, isNew])
+  );
 
   async function handleSave() {
     if (!name.trim() || !balance.trim()) {
@@ -64,32 +66,43 @@ export default function WalletDetailScreen() {
 
     try {
       setLoading(true);
+      const parsedBalance = parseCurrencyInput(balance);
+      const rate = currentWalletType === 'SAVING' ? Number(interestRate) || 0 : null;
+
       if (isNew) {
-        await walletService.createWallet(
-          {
-            name: name.trim(),
-            type: walletType,
-            balance: parseCurrencyInput(balance),
-            interestRatePercent: currentWalletType === 'SAVING' ? Number(interestRate) || 0 : null,
-          },
-          token
+        await localWalletService.createWallet(
+          name.trim(),
+          currentWalletType,
+          parsedBalance,
+          'VND',
+          rate
         );
         showToast('Đã tạo tài khoản/ví mới thành công.', 'success');
       } else {
-        await walletService.updateWallet(
+        await localWalletService.updateWallet(
           id!,
-          {
-            name: name.trim(),
-            balance: parseCurrencyInput(balance),
-            type: currentWalletType,
-            interestRatePercent: currentWalletType === 'SAVING' ? Number(interestRate) || 0 : null,
-          },
-          token
+          name.trim(),
+          currentWalletType,
+          parsedBalance,
+          'VND',
+          rate
         );
         showToast('Đã cập nhật thông tin ví thành công.', 'success');
       }
+      
+      // Làm mới danh sách ví trong app store
       await loadWallets();
-      router.back();
+
+      // Gọi đồng bộ ngầm lên server MySQL
+      if (token) {
+        syncService.syncAll(token).catch(console.error);
+      }
+
+      if (router.canGoBack()) {
+        router.back();
+      } else {
+        router.replace('/');
+      }
     } catch (error: any) {
       showToast(error.message || 'Không thể lưu ví', 'error');
     } finally {
@@ -101,10 +114,20 @@ export default function WalletDetailScreen() {
     if (isNew || !id) return;
     try {
       setLoading(true);
-      await walletService.deleteWallet(id, token);
+      await localWalletService.deleteWallet(id);
       await loadWallets();
-      showToast('Đã xóa tài khoản/ví.', 'success');
-      router.back();
+      showToast('Đã xóa tài khoản/ví thành công.', 'success');
+
+      // Gọi đồng bộ ngầm lên server MySQL
+      if (token) {
+        syncService.syncAll(token).catch(console.error);
+      }
+
+      if (router.canGoBack()) {
+        router.back();
+      } else {
+        router.replace('/');
+      }
     } catch (error: any) {
       showToast(error.message || 'Không thể xóa ví', 'error');
     } finally {
@@ -124,7 +147,13 @@ export default function WalletDetailScreen() {
   return (
     <AppScreen>
       <View style={styles.headerRow}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+        <TouchableOpacity onPress={() => {
+          if (router.canGoBack()) {
+            router.back();
+          } else {
+            router.replace('/');
+          }
+        }} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>

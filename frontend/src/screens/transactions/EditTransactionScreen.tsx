@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -12,6 +12,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 
 import { AppHeader } from '@/components/ui/AppHeader';
 import { AppScreen } from '@/components/ui/AppScreen';
@@ -27,22 +28,57 @@ export function EditTransactionScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { categories, updateTransaction, token, isOffline, syncCategory, wallets, showToast } = useAppStore();
 
+  async function pickImage() {
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        showToast('Cần quyền truy cập thư viện để chọn ảnh hóa đơn', 'error');
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        setImageUri(result.assets[0].uri);
+      }
+    } catch (err: any) {
+      console.error('Lỗi khi chọn ảnh:', err);
+      showToast('Không thể chọn ảnh từ thư viện', 'error');
+    }
+  }
+
+  const isIncomeCategory = useCallback((item: any) => {
+    return item.id === 'salary' || item.name === 'Lương' || item.name === 'Thu nhập';
+  }, []);
+
   const expenseCategories = useMemo(
-    () => categories.filter((item) => item.id !== 'salary'),
-    [categories],
+    () => categories.filter((item) => !isIncomeCategory(item)),
+    [categories, isIncomeCategory],
   );
   const skipCategoryReset = useRef(true);
 
   const [amount, setAmount] = useState('');
   const [type, setType] = useState<'expense' | 'income'>('expense');
   const availableCategories = useMemo(
-    () => (type === 'income' ? categories.filter((item) => item.id === 'salary') : expenseCategories),
-    [categories, expenseCategories, type],
+    () => (type === 'income' ? categories.filter((item) => isIncomeCategory(item)) : expenseCategories),
+    [categories, expenseCategories, type, isIncomeCategory],
   );
   const [categoryId, setCategoryId] = useState('');
   const [transactionDate, setTransactionDate] = useState('');
   const [note, setNote] = useState('');
   const [imageUri, setImageUri] = useState<string | undefined>(undefined);
+  const { imageUri: newImageUri } = useLocalSearchParams<{ imageUri?: string }>();
+
+  useEffect(() => {
+    if (newImageUri) {
+      setImageUri(newImageUri);
+    }
+  }, [newImageUri]);
+
   const [selectedWalletId, setSelectedWalletId] = useState('');
   
   const [loading, setLoading] = useState(false);
@@ -74,7 +110,11 @@ export function EditTransactionScreen() {
       } catch (error) {
         console.error('Lỗi khi tải chi tiết giao dịch:', error);
         showToast('Không thể lấy thông tin giao dịch cần sửa', 'error');
-        router.back();
+        if (router.canGoBack()) {
+          router.back();
+        } else {
+          router.replace('/');
+        }
       } finally {
         setFetching(false);
       }
@@ -134,7 +174,11 @@ export function EditTransactionScreen() {
           imageUri,
         });
         showToast('Đã cập nhật giao dịch thành công.', 'success');
-        router.back();
+        if (router.canGoBack()) {
+          router.back();
+        } else {
+          router.replace('/');
+        }
       } catch (error: any) {
         showToast(error.message || 'Không thể cập nhật giao dịch', 'error');
       } finally {
@@ -156,7 +200,6 @@ export function EditTransactionScreen() {
       <AppHeader title="Sửa giao dịch" subtitle="Cập nhật thông tin giao dịch của bạn" back />
       {isOffline ? <OfflineBanner /> : null}
 
-      {/* Hiển thị ảnh xem trước nếu có */}
       {imageUri ? (
         <View style={{ position: 'relative', marginBottom: spacing.md }}>
           <Image
@@ -178,7 +221,29 @@ export function EditTransactionScreen() {
             <Ionicons name="close" size={20} color={colors.white} />
           </TouchableOpacity>
         </View>
-      ) : null}
+      ) : (
+        <TouchableOpacity
+          onPress={pickImage}
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: colors.surface,
+            borderWidth: 1.5,
+            borderStyle: 'dashed',
+            borderColor: colors.primaryDark,
+            borderRadius: radius.xl,
+            height: 56,
+            marginBottom: spacing.md,
+            gap: spacing.sm,
+          }}
+        >
+          <Ionicons name="images-outline" size={20} color={colors.primaryDark} />
+          <Text style={{ color: colors.primaryDark, fontWeight: '700', fontSize: 15 }}>
+            Tải lên ảnh hóa đơn
+          </Text>
+        </TouchableOpacity>
+      )}
 
       <View style={{ gap: spacing.lg }}>
         <View>
@@ -356,7 +421,13 @@ export function EditTransactionScreen() {
 
       <View style={{ gap: spacing.md, marginTop: spacing.xl }}>
         <PrimaryButton label="Lưu thay đổi" onPress={onSave} loading={loading} />
-        <SecondaryButton label="Hủy" onPress={() => router.back()} />
+        <SecondaryButton label="Hủy" onPress={() => {
+          if (router.canGoBack()) {
+            router.back();
+          } else {
+            router.replace('/');
+          }
+        }} />
       </View>
     </AppScreen>
   );

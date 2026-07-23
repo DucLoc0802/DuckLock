@@ -18,6 +18,7 @@ import { useAppStore } from '@/src/store/app-store';
 import { colors, radius, spacing } from '@/src/theme/tokens';
 import { formatCompactCurrency, formatDate } from '@/src/utils/format';
 import { transactionService } from '@/src/services/transactionService';
+import { LocalDatabase } from '@/src/db/localDatabase';
 
 export function TransactionDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -35,14 +36,51 @@ export function TransactionDetailScreen() {
       if (!id) return;
       try {
         setLoading(true);
-        const data = await transactionService.getTransactionDetail(id, token);
-        setDetail(data);
-        if (data.rawCategory) {
-          syncCategory(data.rawCategory);
+        
+        // 1. Đọc nhanh từ SQLite local để hiển thị ngay lập tức (Offline-First)
+        try {
+          const db = await LocalDatabase.getDb();
+          const row = await db.getFirstAsync<any>('SELECT * FROM transactions WHERE id = ?', [id]);
+          if (row) {
+            setDetail({
+              id: row.id,
+              categoryId: row.category_id,
+              walletId: row.wallet_id,
+              amount: row.amount,
+              type: row.type,
+              note: row.note || '',
+              transactionDate: row.transaction_date,
+              imageUri: row.image_uri || undefined,
+            });
+            setLoading(false); // Ẩn loading sớm vì đã có data hiển thị
+          }
+        } catch (localErr) {
+          console.log('Lỗi đọc chi tiết giao dịch từ SQLite:', localErr);
+        }
+
+        // 2. Lấy dữ liệu mới nhất từ server nếu online
+        if (token) {
+          const data = await transactionService.getTransactionDetail(id, token);
+          setDetail((prev: any) => ({
+            id: data.id,
+            categoryId: data.categoryId,
+            walletId: data.walletId,
+            amount: data.amount,
+            type: data.type,
+            note: data.description || data.note || '',
+            transactionDate: data.transactionDate,
+            imageUri: data.imageUri || prev?.imageUri || undefined,
+          }));
+          if (data.rawCategory) {
+            syncCategory(data.rawCategory);
+          }
         }
       } catch (error) {
         console.error('Lỗi khi tải chi tiết giao dịch:', error);
-        showToast('Không thể kết nối lấy chi tiết giao dịch.', 'error');
+        // Không báo lỗi nếu đã load thành công từ local trước đó
+        if (!detail) {
+          showToast('Không thể kết nối lấy chi tiết giao dịch.', 'error');
+        }
       } finally {
         setLoading(false);
       }
@@ -65,7 +103,11 @@ export function TransactionDetailScreen() {
               if (id) {
                 await deleteTransaction(id);
                 showToast('Đã xóa giao dịch thành công.', 'success');
-                router.back();
+                if (router.canGoBack()) {
+                  router.back();
+                } else {
+                  router.replace('/');
+                }
               }
             } catch (error: any) {
               showToast(error.message || 'Không thể xóa giao dịch', 'error');
@@ -101,7 +143,13 @@ export function TransactionDetailScreen() {
   return (
     <AppScreen>
       <View style={styles.headerRow}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+        <TouchableOpacity onPress={() => {
+          if (router.canGoBack()) {
+            router.back();
+          } else {
+            router.replace('/');
+          }
+        }} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Chi tiết giao dịch</Text>
@@ -118,10 +166,21 @@ export function TransactionDetailScreen() {
           <View
             style={[
               styles.categoryIconCircle,
-              { backgroundColor: category?.color ?? colors.primarySoft },
+              { 
+                backgroundColor: detail?.imageUri ? 'transparent' : (category?.color ?? colors.primarySoft),
+                overflow: 'hidden'
+              },
             ]}
           >
-            <Text style={{ fontSize: 32 }}>{category?.icon ?? '💸'}</Text>
+            {detail?.imageUri ? (
+              <Image
+                source={{ uri: detail.imageUri }}
+                style={{ width: 72, height: 72 }}
+                contentFit="cover"
+              />
+            ) : (
+              <Text style={{ fontSize: 32 }}>{category?.icon ?? '💸'}</Text>
+            )}
           </View>
 
           <Text style={styles.categoryNameText}>{category?.name ?? 'Chưa phân loại'}</Text>

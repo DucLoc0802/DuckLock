@@ -11,7 +11,7 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 
 import { AppHeader } from '@/components/ui/AppHeader';
 import { AppScreen } from '@/components/ui/AppScreen';
@@ -21,6 +21,7 @@ import { colors, radius, spacing } from '@/src/theme/tokens';
 import { formatTime } from '@/src/utils/format';
 
 export function InboxScreen() {
+  const { returnTo, editId } = useLocalSearchParams<{ returnTo?: string; editId?: string }>();
   const { proofImages } = useAppStore();
   const [permission, requestPermission] = useCameraPermissions();
   const cameraRef = useRef<CameraView>(null);
@@ -84,11 +85,17 @@ export function InboxScreen() {
       });
 
       if (photo && photo.uri) {
-        // Chuyển hướng trực tiếp sang Form Thêm giao dịch (add-transaction) kèm theo ảnh vừa chụp
-        router.push({
-          pathname: '/add-transaction',
-          params: { imageUri: photo.uri },
-        });
+        if (returnTo === 'edit-transaction' && editId) {
+          router.replace({
+            pathname: `/edit-transaction/${editId}`,
+            params: { imageUri: photo.uri },
+          } as any);
+        } else {
+          router.replace({
+            pathname: '/add-transaction',
+            params: { imageUri: photo.uri },
+          });
+        }
       }
     } catch (error: any) {
       console.error('Lỗi khi chụp ảnh:', error);

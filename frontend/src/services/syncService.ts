@@ -144,7 +144,16 @@ export const syncService = {
            interest_rate_percent=excluded.interest_rate_percent,
            updated_at=excluded.updated_at,
            sync_status='synced'`,
-        [w.id, w.name, w.type, w.balance, w.currency, w.interest_rate_percent, w.created_at, w.updated_at]
+        [
+          w.id,
+          w.name || 'Ví mới',
+          w.type || 'BANK',
+          Number(w.balance) || 0,
+          w.currency || 'VND',
+          w.interest_rate_percent !== undefined ? (w.interest_rate_percent !== null ? Number(w.interest_rate_percent) : null) : null,
+          w.created_at || new Date().toISOString(),
+          w.updated_at || new Date().toISOString()
+        ]
       );
     }
     // 2. Xóa các ví đã bị xóa trên server
@@ -163,7 +172,13 @@ export const syncService = {
            color=excluded.color,
            is_default=excluded.is_default,
            sync_status='synced'`,
-        [c.id, c.name, c.icon, c.color, c.is_default]
+        [
+          c.id,
+          c.name || 'Danh mục',
+          c.icon || '📝',
+          c.color || '#9E9E9E',
+          c.is_default !== undefined ? c.is_default : (c.isDefault ?? 0)
+        ]
       );
     }
     for (const id of categories.deleted) {
@@ -185,7 +200,18 @@ export const syncService = {
            transaction_date=excluded.transaction_date,
            updated_at=excluded.updated_at,
            sync_status='synced'`,
-        [t.id, t.category_id, t.wallet_id, t.amount, t.currency, t.type, t.note, t.transaction_date, t.created_at, t.updated_at]
+        [
+          t.id,
+          t.category_id ?? t.categoryId ?? null,
+          t.wallet_id ?? t.walletId ?? null,
+          Number(t.amount) || 0,
+          t.currency || 'VND',
+          (t.type ? t.type.toLowerCase() : 'expense'),
+          t.note ?? '',
+          t.transaction_date ?? t.transactionDate ?? new Date().toISOString().slice(0, 10),
+          t.created_at || new Date().toISOString(),
+          t.updated_at || new Date().toISOString()
+        ]
       );
     }
     for (const id of transactions.deleted) {
@@ -194,6 +220,8 @@ export const syncService = {
 
     // D. ĐỒNG BỘ NGÂN SÁCH (BUDGETS)
     for (const b of budgets.active) {
+      const isActVal = b.is_active !== undefined ? b.is_active : (b.isActive ?? 1);
+      const isActNum = (isActVal === true || isActVal === 1 || isActVal === '1') ? 1 : 0;
       await db.runAsync(
         `INSERT INTO budgets (id, name, category_id, amount, currency, budget_month, alert_threshold_percent, is_active, created_at, updated_at, sync_status)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'synced')
@@ -207,7 +235,18 @@ export const syncService = {
            is_active=excluded.is_active,
            updated_at=excluded.updated_at,
            sync_status='synced'`,
-        [b.id, b.name, b.category_id, b.amount, b.currency, b.budget_month, b.alert_threshold_percent, b.is_active, b.created_at, b.updated_at]
+        [
+          b.id,
+          b.name || 'Hạn mức',
+          b.category_id ?? b.categoryId ?? null,
+          Number(b.amount) || 0,
+          b.currency || 'VND',
+          b.budget_month ?? b.budgetMonth ?? new Date().toISOString().slice(0, 10),
+          b.alert_threshold_percent ?? b.alertThresholdPercent ?? 80,
+          isActNum,
+          b.created_at || new Date().toISOString(),
+          b.updated_at || new Date().toISOString()
+        ]
       );
     }
     for (const id of budgets.deleted) {

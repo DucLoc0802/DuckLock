@@ -82,6 +82,7 @@ export interface Budget {
   amountInDefaultCurrency: number | null;
   alertThresholdPercent: number;
   isActive?: boolean;
+  createdAt?: string;
 }
 
 export interface BudgetInput {

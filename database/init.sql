@@ -1,4 +1,5 @@
-USE DuckLock;
+CREATE DATABASE IF NOT EXISTS ducklock;
+USE ducklock;
 
 -- Xóa các bảng theo thứ tự để tránh lỗi ràng buộc khóa ngoại (Foreign Key Constraints)
 DROP TABLE IF EXISTS recurring_transactions;
@@ -67,6 +68,8 @@ CREATE TABLE categories (
     is_default BOOLEAN NOT NULL DEFAULT FALSE,
     sort_order SMALLINT NOT NULL DEFAULT 0,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMP NULL,
     sys_user_id VARCHAR(36) GENERATED ALWAYS AS (COALESCE(user_id, 'SYSTEM')) VIRTUAL,
     UNIQUE KEY uidx_user_category_name (sys_user_id, name),
     INDEX idx_categories_user_id (user_id),

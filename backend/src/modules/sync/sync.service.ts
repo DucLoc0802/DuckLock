@@ -210,6 +210,30 @@ export const SyncService = {
           ]);
 
         } else if (entity_type === 'budget') {
+          // Kiểm tra và tự động chèn danh mục rỗng nếu chưa tồn tại trong MySQL để tránh lỗi khóa ngoại
+          if (data.categoryId) {
+            const [catCheck] = await connection.query<any[]>(`SELECT id FROM categories WHERE id = ?`, [data.categoryId]);
+            if (catCheck.length === 0) {
+              const catName = data.categoryName || 'Khác';
+              // Kiểm tra trùng tên danh mục cho user này để tránh lỗi UNIQUE(user_id, name)
+              const [nameCheck] = await connection.query<any[]>(
+                `SELECT id FROM categories WHERE name = ? AND (user_id = ? OR user_id IS NULL) LIMIT 1`,
+                [catName, userId]
+              );
+              if (nameCheck.length > 0) {
+                // Nếu đã có danh mục mang tên đó, đổi categoryId của ngân sách sang ID của danh mục đã tồn tại
+                data.categoryId = nameCheck[0].id;
+              } else {
+                // Nếu chưa có, chèn danh mục mới với ID mới
+                const insertDummyCat = `
+                  INSERT INTO categories (id, user_id, name, icon, color, is_default, created_at, updated_at)
+                  VALUES (?, ?, ?, '📝', '#9E9E9E', false, NOW(), NOW())
+                `;
+                await connection.query(insertDummyCat, [data.categoryId, userId, catName]);
+              }
+            }
+          }
+
           const insertBudget = `
             INSERT INTO budgets (id, user_id, name, category_id, budget_month, amount, amount_in_default_currency, alert_threshold_percent, is_active, created_at, updated_at, deleted_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)

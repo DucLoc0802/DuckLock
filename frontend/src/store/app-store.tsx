@@ -18,7 +18,121 @@ import { Toast } from '@/components/ui/Toast';
 import { LocalDatabase } from '@/src/db/localDatabase';
 import { localWalletService } from '@/src/db/localWalletService';
 import { localTransactionService } from '@/src/db/localTransactionService';
+import { localCategoryService } from '@/src/db/localCategoryService';
 import { syncService } from '@/src/services/syncService';
+import { formatCompactCurrency } from '../utils/format';
+
+const parseDateSafe = (dateStr: string): Date => {
+  if (!dateStr) return new Date();
+  const formatted = dateStr.replace(' ', 'T');
+  const d = new Date(formatted);
+  return isNaN(d.getTime()) ? new Date(dateStr.slice(0, 10)) : d;
+};
+
+const getCategoryName = (categoryId: string, categoriesList: Category[]): string => {
+  const found = categoriesList.find(c => c.id === categoryId);
+  if (found) return found.name;
+  const defaultNames: Record<string, string> = {
+    food: 'Ăn uống',
+    transport: 'Di chuyển',
+    shopping: 'Mua sắm',
+    bills: 'Hóa đơn',
+    fun: 'Giải trí',
+    health: 'Sức khỏe',
+    salary: 'Lương',
+    gym: 'Gym',
+    coffee: 'Cà phê'
+  };
+  return defaultNames[categoryId] || 'Khác';
+};
+
+const getDisplayCategoryId = (rawCategoryId: string, categoriesList: Category[]): string => {
+  const rawName = getCategoryName(rawCategoryId, categoriesList);
+  const displayCat = categoriesList.find(c => c.name === rawName);
+  return displayCat ? displayCat.id : rawCategoryId;
+};
+
+function calculateReportsOffline(transactions: Transaction[], categoriesList: Category[]): { report: ReportSummary; weeklyReport: number[] } {
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth(); // 0-indexed
+
+  let prevMonth = currentMonth - 1;
+  let prevYear = currentYear;
+  if (prevMonth === -1) {
+    prevMonth = 11;
+    prevYear = currentYear - 1;
+  }
+
+  // 1. Lọc giao dịch tháng này
+  const thisMonthTxs = transactions.filter((t) => {
+    const d = parseDateSafe(t.transactionDate);
+    return d.getFullYear() === currentYear && d.getMonth() === currentMonth;
+  });
+
+  // 2. Lọc giao dịch tháng trước
+  const prevMonthTxs = transactions.filter((t) => {
+    const d = parseDateSafe(t.transactionDate);
+    return d.getFullYear() === prevYear && d.getMonth() === prevMonth;
+  });
+
+  const totalExpense = thisMonthTxs.filter((t) => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
+  const totalIncome = thisMonthTxs.filter((t) => t.type === 'income').reduce((sum, t) => sum + t.amount, 0);
+  const prevExpense = prevMonthTxs.filter((t) => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
+
+  const diff = Math.abs(totalExpense - prevExpense);
+  const compareText = totalExpense > prevExpense 
+    ? `Tăng ${formatCompactCurrency(diff)} so với tháng trước` 
+    : `Giảm ${formatCompactCurrency(diff)} so với tháng trước`;
+
+  // Gom nhóm chi tiêu theo danh mục hiển thị chuẩn trong tháng này
+  const breakdownMap = new Map<string, number>();
+  thisMonthTxs.filter((t) => t.type === 'expense').forEach((t) => {
+    const displayCatId = getDisplayCategoryId(t.categoryId || 'other', categoriesList);
+    breakdownMap.set(displayCatId, (breakdownMap.get(displayCatId) || 0) + t.amount);
+  });
+
+  const totalAmount = Array.from(breakdownMap.values()).reduce((s, v) => s + v, 0);
+  const categoryBreakdown = Array.from(breakdownMap.entries()).map(([categoryId, amount]) => ({
+    categoryId,
+    amount,
+    percent: totalAmount > 0 ? Math.round((amount / totalAmount) * 100) : 0,
+  }));
+
+  const report: ReportSummary = {
+    monthLabel: `Tháng ${currentMonth + 1} năm ${currentYear}`,
+    totalExpense,
+    totalIncome,
+    compareText,
+    dailySeries: [],
+    categoryBreakdown,
+  };
+
+  // 3. Tính weeklyReport (Tuần hiện tại: Thứ 2 -> Chủ nhật)
+  const currentDay = now.getDay(); // 0: CN, 1: T2, ..., 6: T7
+  const distanceToMonday = currentDay === 0 ? -6 : 1 - currentDay;
+  const monday = new Date(now);
+  monday.setDate(now.getDate() + distanceToMonday);
+  monday.setHours(0, 0, 0, 0);
+
+  const sunday = new Date(monday);
+  sunday.setDate(monday.getDate() + 6);
+  sunday.setHours(23, 59, 59, 999);
+
+  const weeklyReport = [0, 0, 0, 0, 0, 0, 0];
+  transactions.filter((t) => {
+    if (t.type !== 'expense') return false;
+    const d = parseDateSafe(t.transactionDate);
+    return d >= monday && d <= sunday;
+  }).forEach((t) => {
+    const d = parseDateSafe(t.transactionDate);
+    const day = d.getDay();
+    const index = day === 0 ? 6 : day - 1;
+    weeklyReport[index] += t.amount;
+  });
+
+  return { report, weeklyReport };
+}
 
 interface AppStoreValue {
   authState: AsyncState;
@@ -74,8 +188,8 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
           setToken(tokenRecord.value);
           setUser(JSON.parse(userRecord.value));
         } else {
-          // Nạp categories mặc định nếu chưa đăng nhập
-          categoryService.listCategories().then(setCategories);
+          // Nạp categories mặc định từ SQLite local nếu chưa đăng nhập
+          localCategoryService.listCategories().then(setCategories);
         }
       } catch (err) {
         console.error('Không thể khởi tạo database hoặc phục hồi session:', err);
@@ -89,13 +203,20 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
     setWallets(data);
   }
 
-  async function refreshData() {
+  const refreshData = useCallback(async () => {
     // Luôn luôn đọc dữ liệu từ SQLite local trước để UI hiển thị nhanh nhất
     const localWallets = await localWalletService.listWallets();
     const localTxs = await localTransactionService.listTransactions();
+    const localCats = await localCategoryService.listCategories();
     
     setWallets(localWallets);
     setTransactions(localTxs);
+    setCategories(localCats);
+
+    // Tính toán báo cáo offline ngay từ dữ liệu local để UI thay đổi tức thì
+    const localReports = calculateReportsOffline(localTxs, localCats);
+    setReport(localReports.report);
+    setWeeklyReport(localReports.weeklyReport);
 
     if (!token || isOffline) return;
 
@@ -106,29 +227,25 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
       // Sau khi đồng bộ thành công, đọc lại local database để cập nhật dữ liệu mới từ server về
       const updatedWallets = await localWalletService.listWallets();
       const updatedTxs = await localTransactionService.listTransactions();
+      const updatedCats = await localCategoryService.listCategories();
       
       setWallets(updatedWallets);
       setTransactions(updatedTxs);
+      setCategories(updatedCats);
 
-      // Cập nhật các báo cáo tuần/tháng online từ backend
-      const [nextReport, nextWeeklyReport] = await Promise.all([
-        reportService.getMonthlySummary(token),
-        reportService.getWeeklySummary(token),
-      ]);
-
-      if (nextReport) setReport(nextReport);
-      if (nextWeeklyReport?.dailySeries) {
-        setWeeklyReport(nextWeeklyReport.dailySeries);
-      }
+      // Tính lại báo cáo từ dữ liệu local mới nhất
+      const updatedReports = calculateReportsOffline(updatedTxs, updatedCats);
+      setReport(updatedReports.report);
+      setWeeklyReport(updatedReports.weeklyReport);
     } catch (error) {
       console.log('Thông báo: Đồng bộ ngầm thất bại (thiết bị hoạt động ở chế độ offline).');
     }
-  }
+  }, [token, isOffline]);
 
   // 2. Tải dữ liệu khi Token thay đổi (Đăng nhập/Đăng xuất)
   useEffect(() => {
     // Nạp categories mặc định
-    categoryService.listCategories().then(setCategories);
+    localCategoryService.listCategories().then(setCategories);
     
     if (token) {
       // 1. Tải nhanh từ SQLite local để hiện UI lập tức
