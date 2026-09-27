@@ -103,10 +103,9 @@ export function BudgetScreen() {
               {budgets.map((item) => {
                 const category = categories.find((value) => value.id === item.categoryId);
                 
-                // Tự tính spent chỉ dựa trên các giao dịch phát sinh kể từ ngày tạo ngân sách trở đi
+                // Tự tính spent dựa trên tất cả các giao dịch chi tiêu phát sinh trong tháng của ngân sách
                 const spent = (() => {
                   const budgetMonthStr = item.budgetMonth.slice(0, 7);
-                  const budgetCreatedDateStr = item.createdAt ? item.createdAt.slice(0, 10) : '1970-01-01';
                   
                   const getCatName = (catId: string): string => {
                     const found = categories.find(c => c.id === catId);
@@ -125,21 +124,25 @@ export function BudgetScreen() {
                     return defaultNames[catId] || 'Khác';
                   };
 
-                  return transactions
-                    .filter((tx) => {
-                      if (tx.type !== 'expense') return false;
-                      if (tx.transactionDate.slice(0, 7) !== budgetMonthStr) return false;
-                      
-                      // So sánh danh mục theo TÊN để tránh lệch ID tĩnh (local) và UUID (server)
-                      if (item.categoryId) {
-                        const budgetCatName = getCatName(item.categoryId);
-                        const txCatName = getCatName(tx.categoryId);
-                        if (budgetCatName !== txCatName) return false;
-                      }
-                      
-                      return tx.transactionDate.slice(0, 10) >= budgetCreatedDateStr;
-                    })
-                    .reduce((sum, tx) => sum + tx.amount, 0);
+                  const filteredTxs = transactions.filter((tx) => {
+                    if (tx.type !== 'expense') return false;
+                    
+                    const txMonth = tx.transactionDate ? tx.transactionDate.slice(0, 7) : '';
+                    if (txMonth !== budgetMonthStr) return false;
+                    
+                    // So sánh danh mục theo TÊN để tránh lệch ID tĩnh (local) và UUID (server)
+                    if (item.categoryId) {
+                      const budgetCatName = getCatName(item.categoryId);
+                      const txCatName = getCatName(tx.categoryId);
+                      if (budgetCatName !== txCatName) return false;
+                    }
+                    
+                    return true;
+                  });
+
+                  console.log(`[Budget Debug] Budget: "${item.name}" (Month: ${budgetMonthStr}), Total Txs: ${transactions.length}, Filtered Txs: ${filteredTxs.length}, Spent:`, filteredTxs.reduce((sum, tx) => sum + tx.amount, 0));
+
+                  return filteredTxs.reduce((sum, tx) => sum + tx.amount, 0);
                 })();
                 const percent = item.amount > 0 ? Math.min(100, Math.round((spent / item.amount) * 100)) : 0;
                 return (

@@ -110,7 +110,7 @@ export function InboxScreen() {
     return (
       <View style={styles.cameraContainer}>
         <CameraView
-          style={StyleSheet.absoluteFillObject}
+          style={StyleSheet.absoluteFill}
           ref={cameraRef}
           facing="back"
           flash={flash}
@@ -304,7 +304,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#10B981',
   },
   uploadingOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    position: 'absolute',
+    inset: 0,
     backgroundColor: 'rgba(0,0,0,0.7)',
     justifyContent: 'center',
     alignItems: 'center',
